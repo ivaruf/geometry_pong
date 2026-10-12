@@ -20,7 +20,7 @@
 // All paths are RELATIVE: the game is served from /<slug>/ and is also framed
 // by the arcade from a sibling directory.
 
-const VERSION = 'v1.0.0'; // first release: Sonic Pi sound and music, no debug rings, service worker back on everywhere
+const VERSION = 'v1.1.0'; // power-ups: ten of them, pixel badges and explosions, the Kaos slider on the start screen
 const PREFIX = 'geometry_pong-';
 const CACHE = `${PREFIX}${VERSION}`;
 
@@ -41,11 +41,26 @@ const ASSETS = [
   './js/ui.js',
   './js/audio.js',
   './js/i18n.js',
+  './js/powerups/index.js',
+  './js/powerups/slow.js',
+  './js/powerups/split.js',
+  './js/powerups/bigball.js',
+  './js/powerups/rush.js',
+  './js/powerups/gravity.js',
+  './js/powerups/bumpers.js',
+  './js/powerups/curve.js',
+  './js/powerups/wide.js',
+  './js/powerups/shrink.js',
+  './js/powerups/shield.js',
   './audio/hit.m4a',
   './audio/wall.m4a',
   './audio/goal.m4a',
   './audio/win.m4a',
   './audio/music-match.m4a',
+  './audio/power.m4a',
+  './audio/powerend.m4a',
+  './audio/shield.m4a',
+  './audio/bump.m4a',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/icon-180.png',

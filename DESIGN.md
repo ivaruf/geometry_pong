@@ -101,36 +101,39 @@ back in position before it opens.
 two balls going in "at once" still score in an order, and the first to reach
 the target wins.
 
-## 3. Upgrades
+## 3. Power-ups
 
-**Pickups, in the game, gone when they expire.** They are gameplay, earned by
-playing, and the same for everyone — the in-fiction kind, like dam_break's
-budget, with nothing to do with hub §7's cosmetics. One host toggle,
-"Upgrades: on / off", turns them off for pure Pong.
+**Gameplay only, earned in the match, gone when they expire**: the
+in-fiction kind, like dam_break's budget, nothing to do with hub §7's
+cosmetics. How many appear is the **Kaos / Chaos** slider on the start
+screen: Av / Litt / Noe / Mye / Maks (Off / A bit / Some / Lots / Max).
+**Av is plain Geometry Pong**, with no pickups at all.
 
-A pickup drifts into the arena every 12–20 s. **A ball that touches it gives
-it to whoever hit that ball last** — so pickups are aimed at, not driven to,
-and a fresh serve that touches one wastes it. Each is a spinning geometric
-glyph, and each lasts seconds:
+A pickup appears in the middle of the field; **a ball that touches it
+collects it for whoever hit that ball last**. Pickups are aimed at, not
+driven to, and the personal ones fizzle when a fresh serve touches them. Each
+is a pixel-art badge, and collecting one is a pixel explosion and a flash in
+its colour, with its name on the collector's rim. Ten, one file each under
+`js/powerups/` (ARCHITECTURE.md has the contract):
 
-| pickup  | glyph     | effect                                              |
-| ------- | --------- | --------------------------------------------------- |
-| Wide    | long bar  | your paddle +50 % for 10 s                          |
-| Split   | two dots  | the ball becomes two; the extra vanishes on its first goal |
-| Shield  | arc       | a barrier behind your paddle stops one goal         |
-| Curve   | spiral    | your next three hits bend in flight                 |
-| Slow    | hourglass | every ball slows for 6 s — the one kids reach for   |
-| Shrink  | inward ▸◂ | every *other* paddle −30 % for 8 s                  |
+| power-up | nb | does | for |
+| -------- | -- | ---- | --- |
+| Slow | Sakte | every ball to ~half speed, 6 s | everyone |
+| Split | Del | the ball becomes two; the extra vanishes on its first goal | everyone |
+| Big ball | Stor ball | balls 1.8× bigger, 8 s | everyone |
+| Rush | Fart | balls 1.4× faster, 6 s | everyone |
+| Black hole | Sort hull | a well bends every ball's path, 7 s | everyone |
+| Bumpers | Sprettballer | 3–5 round bumpers in the field, 10 s | everyone |
+| Curve | Skru | balls swerve the way the paddle moved, 8 s | everyone |
+| Wide | Bred | your paddle +50 %, 10 s | the collector |
+| Shrink | Krymp | every other paddle −30 %, 8 s | the collector |
+| Shield | Skjold | a barrier turns your next goal away, up to 12 s | the collector |
 
-Six is deliberate. Each must be readable from its glyph by an eight-year-old
-in a fast game, and every one added makes the others harder to recognise.
+The field-wide ones are `global`: two players collecting one refresh it, never
+double it. A pickup spawns nudged towards whoever is furthest behind, so the
+trailing player has the easiest shot at it — the only catch-up mechanic.
 
-**A quiet catch-up.** A pickup appears off-centre, nudged towards the side of
-whoever is furthest behind, so the trailing player has the easiest shot at it.
-Nobody is told; it just tends to happen. No other comeback mechanic — the race
-stays a race.
-
-The controls stay one axis: left and right, nothing else. No action button.
+The controls stay one axis: left and right, nothing else.
 
 ## 4. Who sits where, and which way is down
 

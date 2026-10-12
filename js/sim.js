@@ -23,8 +23,27 @@
  * so the sim never knows about pointers, keys or a release grace.
  *
  * WHAT HAPPENED is reported as events, drained by main.js for sound and
- * sparks: { type: 'hit' | 'wall' | 'goal', ... }. The sim draws nothing.
+ * sparks: { type: 'hit' | 'wall' | 'goal' | 'shield' | 'power' | 'powerEnd'
+ * | 'bump', ... }. The sim draws nothing.
+ *
+ * POWER-UPS (ARCHITECTURE.md, "Power-ups"). The pickups on the field, their
+ * spawning, and the list of active effects live here; what each power-up
+ * DOES lives in its own file under js/powerups/, which this file calls
+ * through the contract below and never special-cases. How many appear is
+ * this.powerLevel, 0 (none: plain Geometry Pong) to 4, set from the menu
+ * slider and live mid-match. Every tick the modifiers below are reset to
+ * neutral and each active effect writes its own into them, so an effect
+ * that ends simply stops writing and nothing has to be undone:
+ *   this.mods.ballSpeed    multiplies how far every ball moves per tick
+ *   this.mods.ballRadius   multiplies every ball's radius (collisions too)
+ *   side.mods.hl           multiplies that paddle's half length
+ *   side.mods.speed        multiplies that paddle's top speed
+ * plus two counters an effect may set and the sim spends: side.shield (goals
+ * a side can still turn away) and ball.extra (a ball that vanishes on its
+ * first goal instead of being served again).
  */
+
+import { POWERUPS } from './powerups/index.js';
 
 export const COLORS = ['#3be8ff', '#ff4fd8', '#ffd23f', '#7dff6a', '#ff8a3d', '#a98bff', '#ff5266', '#e8f6ff'];
 export const GLYPHS = ['circle', 'tri', 'square', 'diamond', 'hex', 'plus', 'star', 'ring'];
@@ -42,11 +61,20 @@ const FINGER_SPEED = 4;
 const KEY_SPEED = 1.6;
 const BOT_SPEED = 1.15;
 
+// Power-up level 0..4: seconds between spawns, and how many may wait on the
+// field at once. Level 0 is no power-ups at all.
+const SPAWN_EVERY = [Infinity, 22, 14, 9, 5];
+const SPAWN_MAX = [0, 1, 1, 2, 3];
+export const PICKUP_R = 0.075;
+const PICKUP_LIFE = 14; // seconds a pickup waits before it fades
+
 function side(ux, uy, a, half, type) {
   return {
     ux, uy, tx: -uy, ty: ux, a, half, type,
     player: -1,
-    pad: { s: 0, prev: 0, target: 0, hl: Math.min(0.14, half * 0.32) },
+    pad: { s: 0, prev: 0, target: 0, hl: Math.min(0.14, half * 0.32), hlBase: Math.min(0.14, half * 0.32) },
+    mods: { hl: 1, speed: 1 },
+    shield: 0,
     seal: 0,
     sealBy: -1, // who scored the goal that sealed it; -1 nobody
     flash: 0,
@@ -68,6 +96,12 @@ export class Match {
     this.sides = [];
     this.winner = -1;
     this.events = [];
+    this.powerLevel = 0;
+    this.pickups = []; // { def, x, y, age, life }
+    this.effects = []; // { def, by, t, dur, data }
+    this.spawnIn = 6;
+    this.mods = { ballSpeed: 1, ballRadius: 1 };
+    this.time = 0;
     if (n === 2) {
       const hw = 0.62, hh = 0.86;
       this.sides.push(side(0, 1, hh, hw, 'goal'));
@@ -88,10 +122,36 @@ export class Match {
     this.inradius = Math.min(...this.sides.map((s) => s.a));
     this.balls = [];
     for (let i = 0; i < ballCount(n); i++) {
-      const b = { x: 0, y: 0, vx: 0, vy: 0, dx: 0, dy: 1, speed: SPEED_START, last: -1, wait: 0, trail: [] };
+      const b = this.newBall();
       this.serve(b, 1 + i * 1.4);
       this.balls.push(b);
     }
+  }
+
+  newBall() {
+    return { x: 0, y: 0, vx: 0, vy: 0, dx: 0, dy: 1, speed: SPEED_START, last: -1, wait: 0, trail: [], extra: false, dead: false };
+  }
+
+  /*
+   * A second ball from an existing one, for power-ups: same place, same
+   * speed and owner, heading turned by `turn` radians. It is `extra`, so it
+   * vanishes on its first goal rather than being served again — the number
+   * of balls in a match always comes back to ballCount(n).
+   */
+  addBall(from, turn) {
+    const b = this.newBall();
+    const c = Math.cos(turn), s = Math.sin(turn);
+    b.x = from.x; b.y = from.y;
+    b.vx = from.vx * c - from.vy * s;
+    b.vy = from.vx * s + from.vy * c;
+    b.speed = from.speed; b.last = from.last; b.extra = true;
+    this.balls.push(b);
+    return b;
+  }
+
+  /* The current ball radius, power-ups included. */
+  ballR() {
+    return BALL_R * this.mods.ballRadius;
   }
 
   /* The two corners of a side, for drawing. */
@@ -123,18 +183,114 @@ export class Match {
   }
 
   step(dt, inputs) {
+    this.time += dt;
+    this.tickEffects(dt);
     for (const s of this.sides) {
       if (s.seal > 0) s.seal = Math.max(0, s.seal - dt);
       s.flash = Math.max(0, s.flash - dt * 3);
       if (s.type === 'goal') this.steer(s, dt, inputs[s.player] || null);
     }
     if (this.winner >= 0) return;
-    for (const b of this.balls) this.moveBall(b, dt);
+    const bdt = dt * this.mods.ballSpeed;
+    for (let i = 0; i < this.balls.length; i++) this.moveBall(this.balls[i], bdt);
+    if (this.balls.some((b) => b.dead)) this.balls = this.balls.filter((b) => !b.dead);
+    this.tickPickups(dt);
+  }
+
+  // ---- power-ups ----------------------------------------------------------
+
+  /* Reset every modifier to neutral, then let each live effect write its own. */
+  tickEffects(dt) {
+    this.mods.ballSpeed = 1;
+    this.mods.ballRadius = 1;
+    for (const s of this.sides) { s.mods.hl = 1; s.mods.speed = 1; }
+    for (let i = this.effects.length - 1; i >= 0; i--) {
+      const fx = this.effects[i];
+      fx.t += dt;
+      if (fx.t >= fx.dur) {
+        this.effects.splice(i, 1);
+        if (fx.def.end) fx.def.end(this, fx);
+        this.events.push({ type: 'powerEnd', id: fx.def.id, by: fx.by, x: fx.x, y: fx.y });
+        continue;
+      }
+      if (fx.def.tick) fx.def.tick(this, fx, dt);
+    }
+  }
+
+  tickPickups(dt) {
+    for (let i = this.pickups.length - 1; i >= 0; i--) {
+      const p = this.pickups[i];
+      p.age += dt;
+      if (p.age >= p.life) { this.pickups.splice(i, 1); continue; }
+      const r = PICKUP_R + this.ballR();
+      for (const b of this.balls) {
+        if (b.wait > 0 || b.dead) continue;
+        if ((b.x - p.x) ** 2 + (b.y - p.y) ** 2 > r * r) continue;
+        this.pickups.splice(i, 1);
+        this.collect(p, b);
+        break;
+      }
+    }
+    const level = Math.max(0, Math.min(4, this.powerLevel | 0));
+    if (level === 0) return;
+    this.spawnIn = Math.min(this.spawnIn - dt, SPAWN_EVERY[level]);
+    if (this.spawnIn > 0) return;
+    this.spawnIn = SPAWN_EVERY[level] * (0.75 + this.random() * 0.5);
+    if (this.pickups.length < SPAWN_MAX[level]) this.spawn();
+  }
+
+  /*
+   * A new pickup somewhere in the middle of the field, clear of the serve
+   * point, the other pickups, and nudged a little towards whoever is
+   * furthest behind (DESIGN.md §3, the quiet catch-up).
+   */
+  spawn() {
+    const ready = POWERUPS.filter((d) => d.ready !== false);
+    if (!ready.length) return;
+    let total = 0;
+    for (const d of ready) total += d.weight || 1;
+    let pick = this.random() * total, def = ready[0];
+    for (const d of ready) { pick -= d.weight || 1; if (pick <= 0) { def = d; break; } }
+    let low = this.players[0];
+    for (const s of this.players) if (s.score < low.score) low = s;
+    const reach = this.inradius * 0.55;
+    for (let tries = 0; tries < 12; tries++) {
+      const ang = this.random() * Math.PI * 2;
+      const rad = 0.18 + this.random() * (reach - 0.18);
+      const x = Math.cos(ang) * rad + low.ux * 0.12;
+      const y = Math.sin(ang) * rad + low.uy * 0.12;
+      if (this.pickups.some((p) => Math.hypot(p.x - x, p.y - y) < PICKUP_R * 3)) continue;
+      this.pickups.push({ def, x, y, age: 0, life: PICKUP_LIFE });
+      return;
+    }
+  }
+
+  /*
+   * A ball touched a pickup. It belongs to whoever hit that ball last (-1:
+   * nobody; a power-up that needs an owner checks fx.by and does nothing).
+   * A timed power-up already running — for anyone if it is `global`, for the
+   * same owner if not — is refreshed rather than stacked.
+   */
+  collect(p, ball) {
+    const def = p.def;
+    const by = ball.last;
+    this.events.push({ type: 'power', id: def.id, by, x: p.x, y: p.y });
+    const dur = def.duration || 0;
+    if (dur > 0) {
+      // A global power-up is one effect whoever collects it; a personal one
+      // is one per owner. Either way a repeat refreshes rather than stacks.
+      const live = this.effects.find((f) => f.def === def && (def.global || f.by === by));
+      if (live) { live.t = 0; return; }
+    }
+    const fx = { def, by, t: 0, dur, data: {}, x: p.x, y: p.y };
+    if (def.collect) def.collect(this, fx, ball);
+    if (dur > 0) this.effects.push(fx);
   }
 
   steer(s, dt, input) {
     const pad = s.pad;
-    const range = s.half - pad.hl - 0.02;
+    pad.hl = Math.min(s.half * 0.9, pad.hlBase * s.mods.hl);
+    const range = Math.max(0, s.half - pad.hl - 0.02);
     let speed = BOT_SPEED;
     s.human = !!input;
     if (input && input.target !== undefined) {
@@ -158,7 +314,7 @@ export class Match {
     }
     pad.target = Math.max(-range, Math.min(range, pad.target));
     pad.prev = pad.s;
-    const d = pad.target - pad.s, stepLen = speed * dt;
+    const d = pad.target - pad.s, stepLen = speed * s.mods.speed * dt;
     pad.s += Math.abs(d) <= stepLen ? d : Math.sign(d) * stepLen;
   }
 
@@ -168,12 +324,23 @@ export class Match {
       if (b.wait <= 0) { b.vx = b.dx * b.speed; b.vy = b.dy * b.speed; }
       return;
     }
+    if (b.dead) return;
+    const R = this.ballR();
     b.x += b.vx * dt; b.y += b.vy * dt;
     for (const s of this.sides) {
       const dist = s.a - (b.x * s.ux + b.y * s.uy);
       const vu = b.vx * s.ux + b.vy * s.uy;
-      if (s.type === 'goal' && s.seal <= 0 && dist < -BALL_R * 3) { this.goal(s, b); return; }
-      if (dist >= BALL_R || vu <= 0) continue;
+      // A shield turns the ball back just behind the paddle line, once.
+      if (s.type === 'goal' && s.seal <= 0 && s.shield > 0 && vu > 0 && dist < -R) {
+        b.vx -= 2 * vu * s.ux; b.vy -= 2 * vu * s.uy;
+        b.x -= s.ux * (-R - dist); b.y -= s.uy * (-R - dist);
+        this.antiStall(b, s);
+        s.shield--;
+        this.events.push({ type: 'shield', side: s.player, x: b.x, y: b.y, nx: -s.ux, ny: -s.uy });
+        continue;
+      }
+      if (s.type === 'goal' && s.seal <= 0 && dist < -R * 3) { this.goal(s, b); return; }
+      if (dist >= R || vu <= 0) continue;
       if (s.type === 'wall' || s.seal > 0) {
         b.vx -= 2 * vu * s.ux; b.vy -= 2 * vu * s.uy;
         this.antiStall(b, s);
@@ -183,7 +350,7 @@ export class Match {
       const sc = b.x * s.tx + b.y * s.ty, pad = s.pad;
       // The paddle only counts while the ball is still in front of the line;
       // once it is half a radius past, it is going in.
-      if (dist > -BALL_R * 0.5 && Math.abs(sc - pad.s) <= pad.hl + BALL_R) {
+      if (dist > -R * 0.5 && Math.abs(sc - pad.s) <= pad.hl + R) {
         const off = Math.max(-1, Math.min(1, (sc - pad.s) / pad.hl));
         const english = ((pad.s - pad.prev) / dt) * 0.08;
         const ang = Math.max(-1.1, Math.min(1.1, off * MAX_ANGLE + english));
@@ -191,7 +358,7 @@ export class Match {
         const dx = -s.ux * Math.cos(ang) + s.tx * Math.sin(ang);
         const dy = -s.uy * Math.cos(ang) + s.ty * Math.sin(ang);
         b.vx = dx * b.speed; b.vy = dy * b.speed;
-        b.x -= s.ux * (BALL_R - dist); b.y -= s.uy * (BALL_R - dist);
+        b.x -= s.ux * (R - dist); b.y -= s.uy * (R - dist);
         b.last = s.player;
         s.flash = 1;
         for (const o of this.players) o.botErr = this.botError(o.pad.hl);
@@ -237,7 +404,8 @@ export class Match {
     s.seal = SEAL_TIME;
     s.sealBy = scorer ? scorer.player : -1;
     this.events.push({ type: 'goal', side: s.player, scorer: scorer ? scorer.player : -1, x: b.x, y: b.y, nx: -s.ux, ny: -s.uy });
-    this.serve(b, SERVE_DELAY);
+    if (b.extra) b.dead = true;
+    else this.serve(b, SERVE_DELAY);
   }
 
   /* Which side a point (sim space) belongs to, for touch: its wedge. */

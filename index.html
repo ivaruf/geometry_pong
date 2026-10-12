@@ -54,7 +54,14 @@
             <span class="cap" id="target-cap" data-i18n="firstTo">Først til</span>
             <div class="seg" id="target" role="group" aria-labelledby="target-cap"></div>
           </div>
-          <p class="how" data-i18n="start.how">Legg en finger på kanten foran deg, eller bruk ← → og A D. Sider ingen spiller på, tar en robot.</p>
+          <!-- How many power-ups appear: Off is plain Geometry Pong. Stored
+               as geometry_pong.powerups.v1 (js/ui.js). -->
+          <div class="row slider-row">
+            <label class="cap" for="powerups" data-i18n="powerups">Kaos</label>
+            <input id="powerups" type="range" min="0" max="4" step="1" value="2" />
+            <output id="powerups-out" for="powerups">Noe</output>
+          </div>
+          <p class="how" data-i18n="start.how">Legg en finger på kanten foran deg, eller bruk ← → og A D. Sider ingen spiller på, tar en robot. Kaos er hvor mange ekstrakrefter ballen kan fange – av gir vanlig pong.</p>
         </div>
         <div class="doors">
           <button id="play" class="go" type="button" data-i18n="play">Spill</button>

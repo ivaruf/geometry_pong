@@ -12,6 +12,12 @@
  *   wall         a soft tick for a wall or a sealed side.
  *   goal         a bright run and a shimmer; the music ducks under it.
  *   win          the fanfare; it also fades the music out.
+ *   power        a pickup collected: an upward bloop onto a bell, rooted on
+ *                G4 and played at a playbackRate per power-up id, so each
+ *                kind has its own pentatonic note. One file, ten kinds.
+ *   powerend     a timed power-up ran out: the pickup's glide, downward, soft.
+ *   shield       a shield turned a goal away: a clang with a zap over it.
+ *   bump         a bumper boing; coalesced like the wall tick.
  *   music-match  a 32 s loop on the MUSIC bus while a match is running.
  *
  * The graph is   source → per-cue gain → sfxBus ┐
@@ -42,7 +48,16 @@ const RATES = NOTES.map((n) => Math.pow(2, n / 12));
 
 // Per-cue trims over the authored balance. encode-oneshots keeps the relative
 // loudness set by `amp:` in the pieces, so these stay near 1 on purpose.
-const CUES = { hit: 0.9, wall: 1, goal: 1, win: 1 };
+// bump fires often and was authored near a hit's loudness, so it is held back.
+const CUES = { hit: 0.9, wall: 1, goal: 1, win: 1, power: 1, powerend: 1, shield: 1, bump: 0.6 };
+// The pickup's note per power-up id, spread over the pentatonic so kinds that
+// often arrive together differ. An id not listed here plays the root, so a new
+// power-up is never silent — it just shares G until someone gives it a note.
+const POWER_RATES = {
+  slow: RATES[0], split: RATES[4], bigball: RATES[1], rush: RATES[5],
+  gravity: RATES[2], bumpers: RATES[6], curve: RATES[3], wide: RATES[7],
+  shrink: RATES[1], shield: RATES[5],
+};
 const MUSIC = { file: 'music-match', loop: 32 };
 // The loop is normalised on its own to -1 dBFS; this sits it under the cues
 // so the rally's notes are the melody and the music is the floor beneath.
@@ -89,6 +104,7 @@ let previewTimer = 0;
 let track = null; // { source, gain } of the loop that is playing, if any
 let lastAudition = 0;
 let lastWall = 0;
+let lastBump = 0;
 let auditionNote = 0;
 
 /* Callback and promise forms both, for older Safari's decodeAudioData. */
@@ -313,6 +329,14 @@ export const audio = {
       if (ctx.currentTime - lastWall < 0.03) return;
       lastWall = ctx.currentTime;
       play('wall');
+    } else if (e.type === 'power') play('power', POWER_RATES[e.id] || 1);
+    else if (e.type === 'powerEnd') play('powerend', POWER_RATES[e.id] || 1);
+    else if (e.type === 'shield') play('shield');
+    else if (e.type === 'bump') {
+      // A ball rattling between bumpers is a boing, not a drum roll.
+      if (ctx.currentTime - lastBump < 0.06) return;
+      lastBump = ctx.currentTime;
+      play('bump');
     }
   },
 };

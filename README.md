@@ -7,7 +7,7 @@ seals into a wall for two seconds. First to the target wins.
 
 Play it round one tablet with a finger on each edge, on one keyboard
 (← → and A D), or alone against the bots, which take any side nobody is
-playing. Online play over WebRTC is designed (DESIGN.md §6) and not built.
+playing. The Kaos slider adds power-ups, from none to a lot. Online play over WebRTC is designed (DESIGN.md §6) and not built.
 
 ## Running it
 
@@ -26,7 +26,8 @@ hidden, which is expected.
 ```
 index.html            page shell: canvas, the cards, the corner, crash bar
 css/style.css         the cards and the corner
-js/sim.js             THE GAME: polygon, balls, paddles, bots, score; no DOM
+js/sim.js             THE GAME: polygon, balls, paddles, bots, score, pickups; no DOM
+js/powerups/          one file per power-up, and index.js listing them (ARCHITECTURE.md)
 js/render.js          draws a Match on the canvas; the view transform
 js/input.js           fingers and keys -> one input per side
 js/ui.js              start screen, menu panel, match over, the arcade door
@@ -52,4 +53,4 @@ python3 tools/make-icons.py  # after changing the motif
 
 ## Not settled
 
-- **Pickups** and **Online** are in DESIGN.md and not built.
+- **Online** is in DESIGN.md and not built.

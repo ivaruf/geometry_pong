@@ -3,7 +3,8 @@
  * the way back to the arcade. Decides what is showing and what the words
  * say; main.js decides when.
  *
- *   start  the wordmark, the two setup rows (sides, first to), Play, the
+ *   start  the wordmark, the setup rows (sides, first to, and Kaos: how
+ *          many power-ups, Off to Max, which is plain pong at Off), Play, the
  *          update button, and the way back to the arcade last
  *   menu   the one panel behind the three-bar plate. In a match it is the
  *          Pause face (Resume, Restart, Main menu); anywhere else it is the
@@ -29,7 +30,7 @@ import { COLORS } from './sim.js';
 
 const $ = (id) => document.getElementById(id);
 
-export function createUI({ onPlay, onResume, onRestart, onMainMenu, onMenu }) {
+export function createUI({ onPlay, onResume, onRestart, onMainMenu, onMenu, onPower }) {
   const cards = { start: $('start'), menu: $('menu'), over: $('over') };
   let face = 'pause';
   let settingsFrom = 'start'; // the card the Settings face's Back returns to
@@ -118,6 +119,36 @@ export function createUI({ onPlay, onResume, onRestart, onMainMenu, onMenu }) {
   }
   paintMute();
 
+  // ---- Kaos: how many power-ups, 0 (off) to 4, set before a match ----
+  // Its own key (hub §6), every access in try/catch, anything but an integer
+  // 0–4 ignored on load. main.js hears changes through onPower.
+  const POWER_KEY = 'geometry_pong.powerups.v1';
+  let powerLevel = 2;
+  try {
+    const v = Number(localStorage.getItem(POWER_KEY));
+    if (localStorage.getItem(POWER_KEY) !== null && Number.isInteger(v) && v >= 0 && v <= 4) powerLevel = v;
+  } catch {
+    /* the default stands */
+  }
+  const powerInput = $('powerups');
+  const powerOut = $('powerups-out');
+  function paintPower() {
+    powerInput.value = String(powerLevel);
+    powerOut.value = t(`powerups.${powerLevel}`);
+    powerInput.setAttribute('aria-valuetext', powerOut.value);
+  }
+  powerInput.addEventListener('input', () => {
+    powerLevel = Number(powerInput.value);
+    try {
+      localStorage.setItem(POWER_KEY, String(powerLevel));
+    } catch {
+      /* not kept; this visit still has it */
+    }
+    paintPower();
+    onPower(powerLevel);
+  });
+  paintPower();
+
   // ---- match over ----
   let overArgs = null;
   function paintOver() {
@@ -134,6 +165,7 @@ export function createUI({ onPlay, onResume, onRestart, onMainMenu, onMenu }) {
   }
   document.addEventListener('arcade:lang', () => {
     paintMute();
+    paintPower();
     paintOver();
     paintExit();
   });
@@ -188,6 +220,7 @@ export function createUI({ onPlay, onResume, onRestart, onMainMenu, onMenu }) {
   }
 
   return {
+    powerLevel: () => powerLevel,
     wireExit,
     current,
     quit,

@@ -21,8 +21,31 @@
  * Sparks are this file's own: main.js feeds it the sim's events.
  */
 
-import { COLORS, GLYPHS, BALL_R, SERVE_DELAY } from './sim.js';
-import { t } from './i18n.js';
+import { COLORS, GLYPHS, SERVE_DELAY, PICKUP_R } from './sim.js';
+import { t, getLang } from './i18n.js';
+import { POWERUPS } from './powerups/index.js';
+
+const DEF = Object.fromEntries(POWERUPS.map((d) => [d.id, d]));
+const TOAST_TIME = 2.2;
+
+/*
+ * THE PIXEL LAYER. Power-ups get a look of their own on top of the neon: a
+ * chunky pixel-art badge on the field, and pixel explosions when one is
+ * collected, runs out, or does something (a shield turning a ball, a bumper
+ * kicking one). Everything else in the game stays smooth light, so a square
+ * pixel always means "a power-up did that".
+ *
+ * The badge is drawn small into one shared offscreen canvas — rim, bevel,
+ * dark core, and the power-up's own glyph(), unchanged — then scaled up onto
+ * the board with smoothing off. That is what makes all ten glyphs, written
+ * by different hands as smooth vector strokes, come out as one family of
+ * sprites. One canvas, reused for each pickup in turn: nothing allocated.
+ *
+ * Explosion pixels snap to a grid of CELL CSS pixels, so they move in steps
+ * the way an old arcade sprite does.
+ */
+const BADGE = 20; // offscreen badge size: small, so each of its pixels lands 2–3 CSS pixels wide
+const CELL = 4; // CSS pixels per explosion pixel
 
 export const RIM = 0.32;
 
@@ -53,9 +76,53 @@ export function createRenderer(canvas, view) {
   const sparks = [];
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
   let shake = 0;
+  // The power-up's name, shown on the collector's rim line for a moment.
+  const toasts = new Map(); // player index -> { text, colour, t }
+  const pix = []; // explosion pixels { x, y, vx, vy, life, max, colour, size }
+  const rings = []; // pixel shockwaves { x, y, r, vr, life, max, colour }
+  let flash = null; // { colour, t } a moment of colour over the whole board
+  const badge = document.createElement('canvas');
+  badge.width = badge.height = BADGE;
+  const bctx = badge.getContext('2d');
+
+  /* A pixel explosion: power ~0.4 for a bump, ~1.3 for a pickup. */
+  function blast(x, y, colour, power, withFlash) {
+    let count = Math.round(30 * power);
+    if (reduced.matches) count = Math.ceil(count / 2);
+    for (let i = 0; i < count; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const v = (0.25 + Math.random() * 0.9) * power;
+      const life = 0.35 + Math.random() * 0.5;
+      pix.push({
+        x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life, max: life,
+        colour: Math.random() < 0.25 ? '#ffffff' : colour,
+        size: Math.random() < 0.3 * power ? 2 : 1,
+      });
+    }
+    if (pix.length > 400) pix.splice(0, pix.length - 400);
+    rings.push({ x, y, r: 0.02, vr: 0.75 * power + 0.2, life: 0.45, max: 0.45, colour });
+    if (power > 1) rings.push({ x, y, r: 0.01, vr: 0.4 * power, life: 0.6, max: 0.6, colour: '#ffffff' });
+    if (withFlash && !reduced.matches) flash = { colour, t: 0.18 };
+  }
 
   function spark(e) {
-    const color = e.type === 'hit' ? COLORS[e.player]
+    if (e.type === 'power') {
+      const def = DEF[e.id];
+      const colour = (def && def.colour) || '#ffffff';
+      if (def && e.by >= 0) toasts.set(e.by, { text: def.name[getLang()] || def.name.en, colour, t: TOAST_TIME });
+      blast(e.x, e.y, colour, 1.3, true);
+      return;
+    }
+    if (e.type === 'powerEnd') {
+      // A small puff where it was picked up: it is over.
+      const def = DEF[e.id];
+      if (e.x !== undefined) blast(e.x, e.y, (def && def.colour) || '#ffffff', 0.45, false);
+      return;
+    }
+    if (e.type === 'shield') { blast(e.x, e.y, '#bfefff', 0.9, false); return; }
+    if (e.type === 'bump') { blast(e.x, e.y, e.colour || '#ffffff', 0.4, false); return; }
+    if (!e.nx && !e.ny) { burst(e.x, e.y, e.colour || '#ffffff', 8); return; }
+    const color = e.type === 'shield' ? '#bfefff' : e.type === 'hit' ? COLORS[e.player]
       : e.type === 'goal' ? (e.scorer >= 0 ? COLORS[e.scorer] : '#ffffff')
       : e.sealBy >= 0 ? COLORS[e.sealBy] : '#9aa4c4';
     let count = e.type === 'goal' ? 30 : e.type === 'hit' ? 10 : 4;
@@ -67,6 +134,65 @@ export function createRenderer(canvas, view) {
     }
     if (sparks.length > 300) sparks.splice(0, sparks.length - 300);
     if (e.type === 'goal' && !reduced.matches) shake = 0.25;
+  }
+
+  // Sparks in every direction, for things that happen in the open field.
+  function burst(x, y, color, count) {
+    for (let i = 0; i < count; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const v = 0.2 + Math.random() * 0.7;
+      sparks.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 0.4 + Math.random() * 0.4, color });
+    }
+    if (sparks.length > 300) sparks.splice(0, sparks.length - 300);
+  }
+
+  /*
+   * One power-up's badge into the shared offscreen canvas: a pointy hexagon
+   * with a two-pixel rim in its colour, a lit bevel on the upper-left edges,
+   * a dark core with a faint tint, and its glyph on top. Drawn every frame
+   * because glyphs animate; at 20×20 that costs next to nothing.
+   */
+  function drawBadge(def, colour, time) {
+    const b = bctx, c = BADGE / 2;
+    b.setTransform(1, 0, 0, 1, 0, 0);
+    b.globalCompositeOperation = 'source-over';
+    b.globalAlpha = 1;
+    b.clearRect(0, 0, BADGE, BADGE);
+    const hex = (r) => {
+      b.beginPath();
+      for (let k = 0; k < 6; k++) {
+        const a = -Math.PI / 2 + (k * Math.PI) / 3;
+        if (k) b.lineTo(c + Math.cos(a) * r, c + Math.sin(a) * r);
+        else b.moveTo(c + Math.cos(a) * r, c + Math.sin(a) * r);
+      }
+      b.closePath();
+    };
+    const R = BADGE / 2 - 0.5;
+    hex(R);
+    b.fillStyle = colour;
+    b.fill();
+    // The bevel: the three upper-left edges a step lighter.
+    b.save();
+    b.beginPath();
+    b.moveTo(0, 0); b.lineTo(BADGE, 0); b.lineTo(0, BADGE); b.closePath();
+    b.clip();
+    hex(R);
+    b.fillStyle = 'rgba(255,255,255,0.55)';
+    b.fill();
+    b.restore();
+    hex(R - 2);
+    b.fillStyle = '#0a0c16';
+    b.fill();
+    b.globalAlpha = 0.2;
+    b.fillStyle = colour;
+    b.fill();
+    b.globalAlpha = 1;
+    if (def.glyph) {
+      b.translate(c, c);
+      b.lineCap = 'round';
+      b.lineJoin = 'round';
+      def.glyph(b, BADGE * 0.24, time, 0.6);
+    }
   }
 
   function line(x1, y1, x2, y2, color, width, alpha) {
@@ -132,6 +258,17 @@ export function createRenderer(canvas, view) {
       if (sp.life <= 0) sparks.splice(i, 1);
     }
     shake = Math.max(0, shake - dt);
+    for (let i = pix.length - 1; i >= 0; i--) {
+      const p = pix[i];
+      p.life -= dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.94; p.vy *= 0.94;
+      if (p.life <= 0) pix.splice(i, 1);
+    }
+    for (let i = rings.length - 1; i >= 0; i--) {
+      const r = rings[i];
+      r.life -= dt; r.r += r.vr * dt;
+      if (r.life <= 0) rings.splice(i, 1);
+    }
+    if (flash && (flash.t -= dt) <= 0) flash = null;
 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.globalCompositeOperation = 'source-over';
@@ -208,7 +345,44 @@ export function createRenderer(canvas, view) {
       }
     }
 
+    // Pickups: pixel-art badges (see THE PIXEL LAYER above) that bob in
+    // whole pixels, with three sparkle pixels circling. They fade in, and
+    // blink through their last two seconds.
+    const cell = CELL * px;
+    const snap = (v) => Math.round(v / cell) * cell;
+    for (const p of m.pickups) {
+      const def = p.def;
+      const colour = def.colour || '#ffffff';
+      const fade = Math.min(1, p.age / 0.3);
+      const left = p.life - p.age;
+      const blink = left < 2 ? (Math.cos(time * 14) > -0.3 ? 1 : 0.25) : 1;
+      const size = PICKUP_R * 2.3;
+      const bob = snap(Math.sin(time * 3 + p.x * 9) * cell * 1.5);
+      drawBadge(def, colour, time);
+      ctx.save();
+      ctx.imageSmoothingEnabled = false;
+      ctx.globalAlpha = fade * blink;
+      ctx.drawImage(badge, snap(p.x - size / 2), snap(p.y - size / 2) + bob, size, size);
+      ctx.restore();
+      ctx.fillStyle = colour;
+      for (let k = 0; k < 3; k++) {
+        const a = time * 2.2 + (k * Math.PI * 2) / 3;
+        ctx.globalAlpha = (0.5 + 0.5 * Math.sin(time * 9 + k * 2)) * fade * blink;
+        ctx.fillRect(snap(p.x + Math.cos(a) * size * 0.66), snap(p.y + Math.sin(a) * size * 0.66) + bob, cell, cell);
+      }
+    }
+
+    // Effects that show while they last (ripples, wells, bumpers…).
+    for (const fx of m.effects) {
+      if (!fx.def.draw) continue;
+      ctx.save();
+      ctx.globalAlpha = 1;
+      fx.def.draw(ctx, m, fx, time, px);
+      ctx.restore();
+    }
+
     // Balls wear their last hitter's colour: who a goal will score for.
+    const BALL_R = m.ballR();
     for (const b of m.balls) {
       if (b.wait > 0) continue;
       const col = b.last >= 0 ? COLORS[b.last] : '#ffffff';
@@ -228,10 +402,40 @@ export function createRenderer(canvas, view) {
       ctx.fill();
     }
 
+    for (const [k, toast] of toasts) {
+      toast.t -= dt;
+      if (toast.t <= 0) toasts.delete(k);
+    }
+
     for (const sp of sparks) {
       ctx.globalAlpha = Math.max(0, Math.min(1, sp.life * 1.6));
       ctx.fillStyle = sp.color;
       ctx.fillRect(sp.x - px * 1.5, sp.y - px * 1.5, px * 3, px * 3);
+    }
+
+    // The pixel layer's explosions: shockwave rings laid down a pixel at a
+    // time, then the pixels themselves, white for their first instant.
+    for (const r of rings) {
+      const n = Math.max(12, Math.min(160, Math.ceil((Math.PI * 2 * r.r) / cell)));
+      ctx.globalAlpha = 0.85 * (r.life / r.max);
+      ctx.fillStyle = r.colour;
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * Math.PI * 2;
+        ctx.fillRect(snap(r.x + Math.cos(a) * r.r), snap(r.y + Math.sin(a) * r.r), cell, cell);
+      }
+    }
+    for (const p of pix) {
+      ctx.globalAlpha = Math.min(1, (p.life / p.max) * 1.4);
+      ctx.fillStyle = p.max - p.life < 0.06 ? '#ffffff' : p.colour;
+      const sz = cell * p.size;
+      ctx.fillRect(snap(p.x) - (p.size - 1) * cell * 0.5, snap(p.y) - (p.size - 1) * cell * 0.5, sz, sz);
+    }
+    if (flash) {
+      ctx.globalAlpha = 0.14 * (flash.t / 0.18);
+      ctx.fillStyle = flash.colour;
+      ctx.beginPath();
+      ctx.arc(0, 0, m.radius + 0.4, 0, Math.PI * 2);
+      ctx.fill();
     }
 
     ctx.globalCompositeOperation = 'source-over';
@@ -282,7 +486,16 @@ export function createRenderer(canvas, view) {
         label = t('rim.bot');
         ctx.globalAlpha = 0.45 + 0.3 * Math.sin(time * 3);
       }
+      const toast = toasts.get(s.player);
+      if (toast && m.winner < 0) {
+        label = toast.text;
+        ctx.fillStyle = toast.colour;
+        ctx.font = `800 0.036px ${font}`;
+        ctx.globalAlpha = Math.min(1, toast.t / 0.4);
+      }
       ctx.fillText(label, 0.02, 0.004);
+      ctx.fillStyle = col;
+      ctx.font = `600 0.03px ${font}`;
       if (m.target - s.score === 1 && m.winner < 0) {
         ctx.globalAlpha = 0.5 + 0.5 * Math.sin(time * 5);
         ctx.fillText(t('rim.oneToGo'), 0.02, 0.045);

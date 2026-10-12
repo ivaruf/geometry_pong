@@ -67,12 +67,14 @@ function startAttract() {
   input.setLive(false);
   audio.music(false);
   setMatch(new Match(attractSides, 3));
+  match.powerLevel = 2; // the title shows them off whatever the slider says
   view.rot = 0;
 }
 
 function startMatch() {
   clearTimeout(overTimer);
   setMatch(new Match(settings.sides, settings.target));
+  match.powerLevel = ui.powerLevel();
   input.reset(match);
   baseAngle = orientAngle();
   state = 'play';
@@ -112,6 +114,10 @@ const ui = createUI({
   onResume: resume,
   onRestart: startMatch,
   onMainMenu: mainMenu,
+  // The slider is live: a paused match picks the new level up on Resume.
+  onPower(level) {
+    if (state !== 'attract') match.powerLevel = level;
+  },
   onMenu() {
     if (state === 'play') pause();
     else if (state === 'paused') resume();

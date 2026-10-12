@@ -223,7 +223,12 @@ h2 {
   display: grid;
   gap: 10px;
 }
-.row,
+.row {
+  display: grid;
+  grid-template-columns: 84px 1fr;
+  align-items: center;
+  gap: 10px;
+}
 .lang-row {
   display: grid;
   grid-template-columns: 84px 1fr;
@@ -236,6 +241,16 @@ h2 {
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--dim);
+}
+/* The Kaos slider shares the setup rows' caption gutter; its words
+   ("Maks", "A bit") get a column of their own on the right. */
+.slider-row {
+  grid-template-columns: 84px 1fr 5ch;
+}
+.slider-row output {
+  text-align: right;
+  font-weight: 700;
+  color: var(--cyan);
 }
 .how {
   margin: 4px 0 0;

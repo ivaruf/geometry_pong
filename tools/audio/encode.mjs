@@ -7,7 +7,7 @@
 //   cd geometry_pong
 //   SP="/Applications/Sonic Pi.app/Contents/Resources/app/server/native/ruby/bin/ruby"
 //   SONIC_PI_PIECES=tools/audio "$SP" ../tools/audio/render.rb /tmp/gp-wav \
-//     hit=2 wall=1.5 goal=3 win=6 music-match=70
+//     hit=2 wall=1.5 goal=3 win=6 power=2 powerend=2 shield=2 bump=1.5 music-match=70
 //   node tools/audio/encode.mjs /tmp/gp-wav
 //
 // The seconds after each name are how long render.rb records; a cue's take is
@@ -39,7 +39,7 @@ const GAME = path.resolve(here, "../..");
 const HUB_ONESHOTS = path.resolve(GAME, "../tools/audio/encode-oneshots.mjs");
 
 // The per-game configuration: which takes are cues and how the music loops.
-const CUES = ["hit", "wall", "goal", "win"];
+const CUES = ["hit", "wall", "goal", "win", "power", "powerend", "shield", "bump"];
 // 64 beats at 120 bpm; the marker tick is one beat (0.5 s) before the loop.
 const MUSIC = { "music-match": { loop: 32, lead: 0.5, bitrate: "128k", peakDb: -1 } };
 
