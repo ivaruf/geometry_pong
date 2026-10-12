@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="nb">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#06070c" />
+    <meta name="description" content="Pong on a polygon: two to eight sides, a finger on each edge of one tablet, or the keyboard." />
+    <title>Geometry Pong</title>
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="icons/icon-180.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
+    <link rel="stylesheet" href="css/style.css" />
+    <!-- The language before first paint, so the page never flashes the wrong
+         one: the hub's shared choice (arcade.lang.v1), Norwegian when there
+         is none. js/i18n.js reads the same key and owns it from then on. -->
+    <script>
+      (function () {
+        var l = "nb";
+        try {
+          if (localStorage.getItem("arcade.lang.v1") === "en") l = "en";
+        } catch (e) {}
+        document.documentElement.lang = l;
+      })();
+    </script>
+    <!-- Classic and first: it must survive anything the module graph does. -->
+    <script src="js/touch-guard.js"></script>
+    <!--
+      What quitting means here: back to the arcade when the arcade framed us,
+      closing the window when we are installed. arcade/exit.js decides that
+      and draws nothing; js/ui.js shows our own button only once
+      window.ArcadeExit has actually turned up. Classic and deferred: another
+      repo's file inside a module graph takes the game down with it when it
+      404s, and it is EXPECTED to 404 when this directory is served alone.
+    -->
+    <script src="../arcade/exit.js" defer data-handled="optional"></script>
+  </head>
+  <body>
+    <canvas id="view" aria-label="Spillebrettet" data-i18n-aria="board.label"></canvas>
+
+    <div id="ui">
+      <!-- The start screen. The bots rally behind it on a polygon that gains
+           a side each time one of them wins. -->
+      <section id="start" class="card start" hidden>
+        <div class="title-block">
+          <h1 class="wordmark">Geometry<span>Pong</span></h1>
+          <p class="tag" data-i18n="start.tag">Pong med flere sider.</p>
+        </div>
+        <div class="setup">
+          <div class="row">
+            <span class="cap" id="sides-cap" data-i18n="sides">Sider</span>
+            <div class="seg" id="sides" role="group" aria-labelledby="sides-cap"></div>
+          </div>
+          <div class="row">
+            <span class="cap" id="target-cap" data-i18n="firstTo">Først til</span>
+            <div class="seg" id="target" role="group" aria-labelledby="target-cap"></div>
+          </div>
+          <p class="how" data-i18n="start.how">Legg en finger på kanten foran deg, eller bruk ← → og A D. Sider ingen spiller på, tar en robot.</p>
+        </div>
+        <div class="doors">
+          <button id="play" class="go" type="button" data-i18n="play">Spill</button>
+          <!-- UPDATE READY: only on the start screen, which is gone for the
+               whole of a match, so no deploy can reload a rally away. Owned
+               end to end by js/update.js, which nothing imports. -->
+          <button id="update" class="go alt" type="button" hidden>
+            <span class="update-title">Ny versjon klar</span>
+            <span class="update-sub">Trykk for å hente den</span>
+          </button>
+          <button id="start-exit" class="go exit" type="button" hidden>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5m6-6-6 6 6 6" /></svg>
+            <span class="exit-label">Tilbake til arkaden</span>
+          </button>
+          <p id="build" hidden></p>
+        </div>
+      </section>
+
+      <!--
+        THE MENU PANEL, the one door behind the three-bar plate (hub §2). Two
+        faces of one card, chosen by js/ui.js:
+          in a match   "Pause": Resume, Restart, Main menu
+          elsewhere    "Settings": no Resume, and a Back
+        Both carry MUSIC and EFFECTS, the language row, and the way back to
+        the arcade last. There is no separate sound panel.
+      -->
+      <section id="menu" class="card menu" hidden>
+        <div class="menu-head">
+          <h2 id="menu-title" data-i18n="paused">Pause</h2>
+          <p id="menu-tag" class="tag" data-i18n="pause.tag">Ballene venter der de var.</p>
+        </div>
+        <div class="actions menu-actions">
+          <button id="menu-resume" class="go" type="button" data-i18n="resume">Fortsett</button>
+          <button id="menu-restart" class="go alt" type="button" data-i18n="restart">Start på nytt</button>
+          <button id="menu-main" class="go alt" type="button" data-i18n="mainMenu">Hovedmeny</button>
+          <button id="menu-back" class="go alt" type="button" hidden data-i18n="back">Tilbake</button>
+        </div>
+        <div class="menu-settings">
+          <div class="vol-row">
+            <label for="vol-music" data-i18n="music">Musikk</label>
+            <input id="vol-music" type="range" min="0" max="100" step="5" value="70" />
+            <output id="vol-music-out" for="vol-music">70</output>
+          </div>
+          <div class="vol-row">
+            <label for="vol-sfx" data-i18n="sfx">Effekter</label>
+            <input id="vol-sfx" type="range" min="0" max="100" step="5" value="80" />
+            <output id="vol-sfx-out" for="vol-sfx">80</output>
+          </div>
+          <p class="vol-hint" data-i18n="sound.hint">Hver side har sin egen tone – en lang ballveksling spiller en melodi.</p>
+          <div class="lang-row">
+            <span class="cap" data-i18n="language">Språk</span>
+            <div class="seg" role="group" data-i18n-label="language" aria-label="Språk">
+              <button type="button" class="seg-btn" data-lang="nb" aria-pressed="true" lang="nb">
+                <svg class="flag" viewBox="0 0 22 16" aria-hidden="true">
+                  <rect width="22" height="16" fill="#ba0c2f"/>
+                  <path d="M6 0h4v16H6zM0 6h22v4H0z" fill="#fff"/>
+                  <path d="M7 0h2v16H7zM0 7h22v2H0z" fill="#00205b"/>
+                </svg>
+                <span>Norsk</span>
+              </button>
+              <button type="button" class="seg-btn" data-lang="en" aria-pressed="false" lang="en">
+                <svg class="flag" viewBox="0 0 60 30" aria-hidden="true">
+                  <clipPath id="uk-clip-menu"><path d="M0 0v30h60V0z"/></clipPath>
+                  <clipPath id="uk-diag-menu"><path d="M30 15h30v15zv15H0zH0V0zV0h30z"/></clipPath>
+                  <g clip-path="url(#uk-clip-menu)">
+                    <path d="M0 0v30h60V0z" fill="#012169"/>
+                    <path d="M0 0l60 30m0-30L0 30" stroke="#fff" stroke-width="6"/>
+                    <path d="M0 0l60 30m0-30L0 30" clip-path="url(#uk-diag-menu)" stroke="#c8102e" stroke-width="4"/>
+                    <path d="M30 0v30M0 15h60" stroke="#fff" stroke-width="10"/>
+                    <path d="M30 0v30M0 15h60" stroke="#c8102e" stroke-width="6"/>
+                  </g>
+                </svg>
+                <span>English</span>
+              </button>
+            </div>
+          </div>
+        </div>
+        <button id="menu-exit" class="go exit" type="button" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5m6-6-6 6 6 6" /></svg>
+          <span class="exit-label">Tilbake til arkaden</span>
+        </button>
+      </section>
+
+      <!-- Match over. Escape is its secondary button: back to the start. -->
+      <section id="over" class="card over" hidden>
+        <span class="winner-mark" aria-hidden="true"></span>
+        <h2 id="over-title"></h2>
+        <p id="over-score" class="tag"></p>
+        <div class="actions pair">
+          <button id="over-again" class="go" type="button" data-i18n="playAgain">Spill igjen</button>
+          <button id="over-main" class="go alt" type="button" data-i18n="mainMenu">Hovedmeny</button>
+        </div>
+      </section>
+
+      <!--
+        THE CORNER (hub §2): menu, sound, fullscreen, left to right, on every
+        screen. Fullscreen changes the window, sound changes the sound, and
+        only the menu touches the game. The glyphs are the hub's exact paths;
+        CSS picks each toggle's picture off aria-pressed.
+      -->
+      <div id="corner">
+        <button id="menu-btn" class="icon-button" type="button" aria-label="Meny" title="Meny" data-i18n-label="menu">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
+        </button>
+        <button id="sound-btn" class="icon-button" type="button" aria-pressed="false" aria-label="Lyd av" title="Lyd av">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M11 5 6 9H3v6h3l5 4Z" />
+            <path class="icon-waves" d="M15 8a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14" />
+            <path class="icon-slash" d="m15.5 9.5 6 5m0-5-6 5" />
+          </svg>
+        </button>
+        <button id="screen-toggle" class="icon-button" type="button" aria-pressed="false" aria-label="Fullskjerm" title="Fullskjerm" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path class="icon-expand" d="M9 3H3v6m12-6h6v6M3 15v6h6m12-6v6h-6" />
+            <path class="icon-contract" d="M3 9h6V3M21 9h-6V3M3 15h6v6M21 15h-6v6" />
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <noscript>
+      <p class="noscript">Geometry Pong trenger JavaScript. / Geometry Pong needs JavaScript.</p>
+    </noscript>
+
+    <!--
+      Crash bar. A module script reports its whole import graph through the
+      one <script> tag, so a failure here names js/main.js even when the file
+      that failed was one of its imports — the message says so.
+    -->
+    <div id="crash" role="alert" hidden></div>
+    <script>
+      (function () {
+        var WORDS = {
+          nb: {
+            load: "Et skript kunne ikke lastes: ",
+            hint: " (er det js/main.js, kan den egentlige feilen være en av filene den importerer)",
+            broke: "Noe gikk i stykker: ",
+          },
+          en: {
+            load: "A script failed to load: ",
+            hint: " (if this is js/main.js, the real culprit may be one of its imports)",
+            broke: "Something broke: ",
+          },
+        };
+        function w() {
+          return WORDS[document.documentElement.lang] || WORDS.nb;
+        }
+        var bar = document.getElementById("crash");
+        function show(msg) {
+          bar.textContent = msg;
+          bar.hidden = false;
+        }
+        window.addEventListener(
+          "error",
+          function (e) {
+            var t = e.target;
+            if (t && t.tagName === "SCRIPT" && t.dataset && t.dataset.handled) return;
+            if (t && t.tagName === "SCRIPT") {
+              show(w().load + t.src + w().hint);
+              return;
+            }
+            show(w().broke + (e.message || e.type));
+          },
+          true,
+        );
+        window.addEventListener("unhandledrejection", function (e) {
+          show(w().broke + (e.reason && e.reason.message ? e.reason.message : e.reason));
+        });
+      })();
+    </script>
+    <!-- The update button and the fullscreen plate, each in a graph of its
+         own and ahead of the game's, so a boot failure takes neither. -->
+    <script type="module" src="js/update.js"></script>
+    <script type="module" src="js/screen.js"></script>
+    <script type="module" src="js/main.js"></script>
+  </body>
+</html>

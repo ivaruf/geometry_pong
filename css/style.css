@@ -1,0 +1,543 @@
+/*
+ * style.css — Geometry Pong's cards and corner, cut from the board itself.
+ *
+ * The board is neon line on black, so the cards are smoked glass over it:
+ * the bots' rally keeps moving behind the start screen, and the panels take
+ * their light from the eight player colours rather than a palette of their
+ * own. The wordmark spells PONG in the first four of them. The corner plates
+ * are hexagons, because everything here is a polygon.
+ *
+ * No web fonts (hub §1): the system's rounded face where there is one,
+ * falling back to the system sans.
+ *
+ * Layout: each card is one grid, centred with top/left 50% and translate
+ * (hub §2, the iPad lesson — never inset:0 + margin:auto). On a sideways
+ * phone each card becomes two columns laid over the same markup by grid
+ * area, maxgear's shape, so no menu scrolls there.
+ */
+
+:root {
+  --void: #06070c;
+  --glass: rgba(9, 11, 20, 0.82);
+  --edge: rgba(120, 140, 210, 0.22);
+  --ink: #e9edf7;
+  --dim: #8f98b3;
+  --cyan: #3be8ff;
+  --pink: #ff4fd8;
+  --yellow: #ffd23f;
+  --green: #7dff6a;
+  --font: ui-rounded, "SF Pro Rounded", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --tap: 48px;
+  --corner-gap: 8px;
+  --corner-room: calc(3 * var(--tap) + 2 * var(--corner-gap) + 24px);
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--void);
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: 15px;
+  -webkit-text-size-adjust: 100%;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+/* A game, not a document (hub §2): js/touch-guard.js is the other half. */
+html,
+body {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+input,
+textarea,
+[contenteditable="true"] {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
+
+/* The board. Every finger on it is a paddle, so nothing may scroll or zoom. */
+#view {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+}
+
+#ui {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* ---- the corner ---- */
+
+#corner {
+  position: absolute;
+  z-index: 2;
+  top: calc(env(safe-area-inset-top, 0px) + 10px);
+  right: calc(env(safe-area-inset-right, 0px) + 12px);
+  display: flex;
+  gap: var(--corner-gap);
+  pointer-events: auto;
+}
+
+.icon-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--tap);
+  height: var(--tap);
+  flex: none;
+  padding: 0;
+  border: 0;
+  color: var(--cyan);
+  background: rgba(59, 232, 255, 0.28);
+  clip-path: polygon(25% 4%, 75% 4%, 100% 50%, 75% 96%, 25% 96%, 0 50%);
+  cursor: pointer;
+  position: relative;
+}
+/* The hexagon's face, inset one pixel so the lighter plate behind reads as
+   its edge (a border would be clipped away at the corners). */
+.icon-button::before {
+  content: "";
+  position: absolute;
+  inset: 1.5px;
+  background: rgba(8, 10, 18, 0.9);
+  clip-path: inherit;
+}
+.icon-button svg {
+  position: relative;
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+/* [hidden] loses to display:flex without this (hub §2, hit three times). */
+.icon-button[hidden] {
+  display: none;
+}
+#sound-btn[aria-pressed="true"] .icon-waves,
+#sound-btn:not([aria-pressed="true"]) .icon-slash,
+#screen-toggle[aria-pressed="true"] .icon-expand,
+#screen-toggle:not([aria-pressed="true"]) .icon-contract {
+  display: none;
+}
+/* clip-path eats an outline, so focus lights the whole plate instead. */
+.icon-button:focus-visible {
+  outline: none;
+  background: var(--ink);
+}
+.icon-button:focus-visible svg {
+  color: var(--ink);
+}
+
+/* ---- cards ---- */
+
+.card {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  translate: -50% -50%;
+  width: min(440px, calc(100% - 32px));
+  max-height: calc(100% - 2 * (var(--tap) + 24px) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  overflow: auto; /* a safety net on very short screens, not the plan */
+  padding: 22px 22px 18px;
+  display: grid;
+  gap: 16px;
+  align-content: start;
+  background: var(--glass);
+  border: 1px solid var(--edge);
+  border-radius: 6px;
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4), 0 20px 60px rgba(0, 0, 0, 0.55);
+  pointer-events: auto;
+}
+
+h1,
+h2 {
+  margin: 0;
+  text-wrap: balance;
+}
+h2 {
+  font-size: 1.5rem;
+  letter-spacing: 0.02em;
+}
+
+.wordmark {
+  display: grid;
+  line-height: 1;
+  font-weight: 800;
+}
+.wordmark {
+  font-size: 0.95rem;
+  letter-spacing: 0.5em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+.wordmark span {
+  /* Shrink to the letters, or the four colour stops spread over the card. */
+  justify-self: start;
+  margin-top: 6px;
+  font-size: 3.6rem;
+  letter-spacing: 0.06em;
+  /* PONG in the first four player colours. */
+  background: linear-gradient(90deg, var(--cyan) 0 25%, var(--pink) 25% 50%, var(--yellow) 50% 75%, var(--green) 75%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0 14px rgba(59, 232, 255, 0.35));
+}
+
+.tag {
+  margin: 0;
+  color: var(--dim);
+  line-height: 1.45;
+}
+.title-block {
+  display: grid;
+  gap: 10px;
+}
+
+.setup {
+  display: grid;
+  gap: 10px;
+}
+.row,
+.lang-row {
+  display: grid;
+  grid-template-columns: 84px 1fr;
+  align-items: center;
+  gap: 10px;
+}
+.cap {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+.how {
+  margin: 4px 0 0;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: var(--dim);
+}
+
+/* Segmented rows: alternatives, so one size each (flex: 1 1 0). */
+.seg {
+  display: flex;
+  gap: 6px;
+}
+.seg-btn {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 42px;
+  padding: 0 6px;
+  border-radius: 4px;
+  border: 1px solid var(--edge);
+  background: transparent;
+  color: var(--ink);
+  font: 700 0.95rem var(--font);
+  font-variant-numeric: tabular-nums;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+}
+.seg-btn[aria-pressed="true"] {
+  border-color: var(--cyan);
+  color: var(--cyan);
+  background: rgba(59, 232, 255, 0.08);
+  box-shadow: inset 0 0 0 1px var(--cyan), 0 0 14px rgba(59, 232, 255, 0.25);
+}
+.flag {
+  width: 22px;
+  height: 16px;
+  flex: none;
+  border-radius: 2px;
+}
+
+/* ---- buttons ---- */
+
+.doors,
+.actions {
+  display: grid;
+  gap: 10px;
+  justify-items: stretch;
+}
+.go {
+  min-height: var(--tap);
+  padding: 0 16px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  font: 700 1.05rem var(--font);
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  background: var(--cyan);
+  color: #021216;
+  box-shadow: 0 0 22px rgba(59, 232, 255, 0.35);
+}
+.go.alt {
+  background: transparent;
+  color: var(--ink);
+  border-color: var(--edge);
+  box-shadow: none;
+}
+/* The way back to the arcade: secondary, last, a little apart. */
+.go.exit {
+  margin-top: 8px;
+  background: transparent;
+  color: var(--dim);
+  border-color: var(--edge);
+  box-shadow: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+.go.exit svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.go:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+button:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+#update {
+  display: grid;
+  gap: 2px;
+  padding: 8px 16px;
+  border-color: var(--yellow);
+  color: var(--yellow);
+}
+#update .update-sub {
+  font-size: 0.8rem;
+  font-weight: 600;
+  opacity: 0.8;
+}
+#update[hidden] {
+  display: none;
+}
+#build {
+  margin: 0;
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- the menu panel ---- */
+
+.menu {
+  grid-template-areas: "head" "actions" "settings" "exit";
+}
+.menu-head {
+  grid-area: head;
+  display: grid;
+  gap: 6px;
+}
+.menu-actions {
+  grid-area: actions;
+}
+.menu-settings {
+  grid-area: settings;
+  display: grid;
+  gap: 10px;
+}
+#menu-exit {
+  grid-area: exit;
+}
+.vol-row {
+  display: grid;
+  grid-template-columns: 84px 1fr 3ch;
+  align-items: center;
+  gap: 10px;
+}
+.vol-row label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+.vol-row output {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.vol-hint {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--dim);
+  line-height: 1.4;
+}
+
+/* A styled range: a bare OS slider belongs to no game. */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 32px;
+  background: transparent;
+  cursor: pointer;
+}
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--cyan), var(--pink));
+}
+input[type="range"]::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--cyan), var(--pink));
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 22px;
+  height: 22px;
+  margin-top: -9px;
+  border-radius: 50%;
+  background: var(--void);
+  border: 2px solid var(--ink);
+  box-shadow: 0 0 10px rgba(59, 232, 255, 0.5);
+}
+input[type="range"]::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--void);
+  border: 2px solid var(--ink);
+}
+input[type="range"]:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+/* ---- match over ---- */
+
+.over {
+  --c: var(--cyan);
+  justify-items: center;
+  text-align: center;
+}
+.winner-mark {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 4px solid var(--c);
+  box-shadow: 0 0 24px var(--c);
+}
+#over-title {
+  color: var(--c);
+}
+.actions.pair {
+  grid-template-columns: 1fr 1fr;
+  width: 100%;
+}
+
+/* ---- a sideways phone: two columns, nothing scrolls ---- */
+
+@media (orientation: landscape) and (max-height: 500px) {
+  .card {
+    width: min(760px, calc(100% - 2 * var(--corner-room)));
+    max-height: calc(100% - 24px);
+    padding: 14px 18px;
+    gap: 10px 22px;
+  }
+  .start {
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas: "title setup" "doors setup";
+  }
+  .title-block {
+    grid-area: title;
+  }
+  .setup {
+    grid-area: setup;
+    align-content: center;
+  }
+  .doors {
+    grid-area: doors;
+    align-content: end;
+  }
+  .wordmark span {
+    font-size: 2.6rem;
+  }
+  .menu {
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas: "head settings" "actions settings" "exit settings";
+  }
+  .menu-settings {
+    align-content: center;
+  }
+  .go,
+  .seg-btn {
+    min-height: 40px;
+    height: auto;
+  }
+  .seg-btn {
+    height: 38px;
+  }
+}
+
+/* ---- failure ---- */
+
+#crash {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
+  z-index: 10;
+  padding: 10px 14px;
+  border-radius: 4px;
+  background: #3a0d16;
+  border: 1px solid #ff5266;
+  color: #ffd9de;
+  font-size: 0.85rem;
+  pointer-events: auto;
+}
+.noscript {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  translate: -50% -50%;
+  margin: 0;
+  color: var(--ink);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wordmark span {
+    filter: none;
+  }
+}
