@@ -201,8 +201,13 @@ no game traffic. It drops a peer whose heartbeat stops — a locked screen is
 enough — so the host reclaims its code on `disconnected` and on a five-second
 beat, and the lobby says when the code is not reachable rather than assuming.
 
-Room codes are four letters from an alphabet without I, O and Q (279,841
-codes), typed into a plain text field in either language.
+Room codes are three pictures out of NeonFox's twelve (1,728 codes),
+tapped on a keypad and said out loud as words — "pizza, pizza, moon" — so a
+child joins without typing anything (hub §8, "Room codes are pictures"). The
+first build used four typed letters; that was a mistake against the hub's
+practice and was replaced before anyone played it. On the wire a code is the
+names joined by dashes, `pizza-pizza-moon`, which is also the broker id's
+tail: `geometry_pong-v1-pizza-pizza-moon`.
 
 ## What a guest may say
 

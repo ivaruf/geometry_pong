@@ -20,7 +20,7 @@
 // All paths are RELATIVE: the game is served from /<slug>/ and is also framed
 // by the arcade from a sibling directory.
 
-const VERSION = 'v1.2.1'; // sideways phones: the cards keep clear of the corner on its side only, so the setup column fits
+const VERSION = 'v1.2.2'; // room codes are three pictures on a keypad, like NeonFox, not typed letters
 const PREFIX = 'geometry_pong-';
 const CACHE = `${PREFIX}${VERSION}`;
 

@@ -151,7 +151,7 @@
       <!--
         ONLINE (js/lobby.js). One card, three steps, one shown at a time:
           choose   Create room / Join, with the rules the room will play by
-          code     the code field and Join
+          code     the picture keypad and Join
           room     the code, big, the seats, and Play for the host
         Back is always last and goes one step back, and so does Escape (hub
         §2: a multi-step flow's Escape is that step's own Back). No way back
@@ -170,15 +170,23 @@
             <button id="online-join" class="go alt" type="button" data-i18n="online.join">Bli med</button>
           </div>
         </div>
-        <form id="online-code" class="online-step" hidden novalidate>
-          <label class="cap" for="code-field" data-i18n="online.code">Kode</label>
-          <input id="code-field" class="code-field" type="text" maxlength="9" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" enterkeyhint="go" />
-          <button id="code-go" class="go" type="submit" data-i18n="online.join">Bli med</button>
-        </form>
+        <!-- Joining: three pictures tapped on a keypad of twelve (hub §8,
+             "Room codes are pictures"). js/lobby.js fills the keys from
+             js/net/codes.js, so the pictures live in one place. -->
+        <div id="online-code" class="online-step" hidden>
+          <div id="pad-slots" class="code-row" aria-hidden="true"></div>
+          <p id="pad-words" class="code-words" aria-live="polite"></p>
+          <div id="pad-keys" class="pad" role="group" data-i18n-label="online.code" aria-label="Kode"></div>
+          <div class="actions pair">
+            <button id="pad-clear" class="go alt" type="button" data-i18n="online.clear">Visk ut</button>
+            <button id="code-go" class="go" type="button" data-i18n="online.join" disabled>Bli med</button>
+          </div>
+        </div>
         <div id="online-room" class="online-step" hidden>
           <div class="room-code-block">
             <span class="cap" data-i18n="online.code">Kode</span>
-            <p id="room-code" class="room-code" aria-live="polite"></p>
+            <div id="room-code" class="code-row hero" role="img" aria-live="polite"></div>
+            <p id="room-words" class="code-words"></p>
             <p id="room-rules" class="rules"></p>
           </div>
           <ul id="room-seats" class="seats"></ul>
