@@ -167,4 +167,20 @@ export default {
       ctx.stroke();
     }
   },
+
+  // Online: the clock, then each bumper as x, y and how long ago it was
+  // struck (-1 never), which draw turns back into a flash.
+  pack(match, fx) {
+    const d = fx.data, out = [d.age];
+    for (const p of d.bumpers) out.push(p.x, p.y, p.hit >= 0 ? Math.min(30, d.age - p.hit) : -1);
+    return out;
+  },
+  unpack(match, fx, nums) {
+    const age = nums[0] || 0, list = [];
+    for (let i = 1; i + 2 < nums.length; i += 3) {
+      list.push({ x: nums[i], y: nums[i + 1], hit: nums[i + 2] >= 0 ? age - nums[i + 2] : -1 });
+    }
+    fx.data.age = age;
+    fx.data.bumpers = list;
+  },
 };

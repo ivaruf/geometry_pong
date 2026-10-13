@@ -164,4 +164,27 @@ export default {
       ctx.stroke();
     }
   },
+
+  // Online: the clock, then one number per ball in match.balls order — 0 for
+  // a ball with no bend yet, else its spin's sign times 1 + the share of its
+  // allowance spent — keyed back onto the guest's balls in the same order.
+  pack(match, fx) {
+    const d = fx.data, out = [d.age];
+    for (const b of match.balls) {
+      const st = d.balls.get(b);
+      out.push(st ? st.sign * (1 + Math.min(1, st.turn / ALLOWANCE)) : 0);
+      if (out.length >= 40) break;
+    }
+    return out;
+  },
+  unpack(match, fx, nums) {
+    const d = fx.data;
+    d.age = nums[0] || 0;
+    d.balls = new WeakMap();
+    for (let i = 1; i < nums.length && i - 1 < match.balls.length; i++) {
+      const v = nums[i];
+      if (!v) continue;
+      d.balls.set(match.balls[i - 1], { sign: Math.sign(v), turn: (Math.abs(v) - 1) * ALLOWANCE });
+    }
+  },
 };

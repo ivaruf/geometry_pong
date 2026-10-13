@@ -20,7 +20,20 @@
  *   null            a bot plays this side
  *   { target: s }   a finger: go to tangent position s, fast
  *   { axis: -1..1 } a key pair: move that way at keyboard speed
+ *   { target: s, remote: true }
+ *                   an online guest's own paddle position (DESIGN.md §6),
+ *                   followed at finger speed, which is the clamp: a guest
+ *                   cannot move further per tick than a finger could
  * so the sim never knows about pointers, keys or a release grace.
+ *
+ * THE REMOTE GRACE. A guest's paddle reaches the host a network trip after
+ * the guest put it there, so a remote side gets two allowances when a ball
+ * arrives: the hit counts if the paddle covers the ball at ANY position it
+ * reported in the last GRACE seconds, and the hit window runs on until just
+ * before the ball would score (LATE_HIT radii behind the line, not half of
+ * one), which leaves room for a position that is still on its way. The
+ * price, written down in docs/P2P.md: on a bad connection a guest sometimes
+ * gets a save the host's own screen did not show.
  *
  * WHAT HAPPENED is reported as events, drained by main.js for sound and
  * sparks: { type: 'hit' | 'wall' | 'goal' | 'shield' | 'power' | 'powerEnd'
@@ -60,6 +73,9 @@ const MIN_LEAVE = Math.sin((20 * Math.PI) / 180); // no bounce leaves flatter th
 const FINGER_SPEED = 4;
 const KEY_SPEED = 1.6;
 const BOT_SPEED = 1.15;
+const GRACE = 0.1; // seconds of a remote paddle's reported positions that still count
+const LATE_HIT = 2.5; // radii behind its line a remote paddle may still return a ball
+const RECENT = 16; // ring of remote positions: 0.1 s is 12 ticks at 120 Hz
 
 // Power-up level 0..4: seconds between spawns, and how many may wait on the
 // field at once. Level 0 is no power-ups at all.
@@ -81,6 +97,11 @@ function side(ux, uy, a, half, type) {
     score: 0,
     botErr: 0,
     human: false,
+    // An online guest's side (THE REMOTE GRACE): its recent reported
+    // positions as a ring of (time, s) pairs, allocated once.
+    remote: false,
+    recent: new Float64Array(RECENT * 2).fill(-1e9),
+    recentAt: 0,
   };
 }
 
@@ -293,9 +314,15 @@ export class Match {
     const range = Math.max(0, s.half - pad.hl - 0.02);
     let speed = BOT_SPEED;
     s.human = !!input;
+    s.remote = !!(input && input.remote);
     if (input && input.target !== undefined) {
       pad.target = input.target;
       speed = FINGER_SPEED;
+      if (s.remote) {
+        s.recent[s.recentAt * 2] = this.time;
+        s.recent[s.recentAt * 2 + 1] = Math.max(-range, Math.min(range, input.target));
+        s.recentAt = (s.recentAt + 1) % RECENT;
+      }
     } else if (input && input.axis !== undefined) {
       pad.target = pad.s + input.axis * 0.5;
       speed = KEY_SPEED;
@@ -330,6 +357,29 @@ export class Match {
     for (const s of this.sides) {
       const dist = s.a - (b.x * s.ux + b.y * s.uy);
       const vu = b.vx * s.ux + b.vy * s.uy;
+      // The paddle only counts while the ball is still in front of the line;
+      // once it is half a radius past, it is going in. A remote side has
+      // until just before the goal (THE REMOTE GRACE in the header).
+      if (s.type === 'goal' && s.seal <= 0 && vu > 0 && dist < R && dist > -R * (s.remote ? LATE_HIT : 0.5)) {
+        const sc = b.x * s.tx + b.y * s.ty;
+        const at = this.cover(s, sc, R);
+        if (at !== null) {
+          const pad = s.pad;
+          const off = Math.max(-1, Math.min(1, (sc - at) / pad.hl));
+          const english = ((pad.s - pad.prev) / dt) * 0.08;
+          const ang = Math.max(-1.1, Math.min(1.1, off * MAX_ANGLE + english));
+          b.speed = Math.min(SPEED_MAX, b.speed * SPEED_UP);
+          const dx = -s.ux * Math.cos(ang) + s.tx * Math.sin(ang);
+          const dy = -s.uy * Math.cos(ang) + s.ty * Math.sin(ang);
+          b.vx = dx * b.speed; b.vy = dy * b.speed;
+          b.x -= s.ux * (R - dist); b.y -= s.uy * (R - dist);
+          b.last = s.player;
+          s.flash = 1;
+          for (const o of this.players) o.botErr = this.botError(o.pad.hl);
+          this.events.push({ type: 'hit', player: s.player, x: b.x, y: b.y, nx: -s.ux, ny: -s.uy });
+          continue;
+        }
+      }
       // A shield turns the ball back just behind the paddle line, once.
       if (s.type === 'goal' && s.seal <= 0 && s.shield > 0 && vu > 0 && dist < -R) {
         b.vx -= 2 * vu * s.ux; b.vy -= 2 * vu * s.uy;
@@ -345,28 +395,29 @@ export class Match {
         b.vx -= 2 * vu * s.ux; b.vy -= 2 * vu * s.uy;
         this.antiStall(b, s);
         this.events.push({ type: 'wall', x: b.x, y: b.y, nx: -s.ux, ny: -s.uy, sealBy: s.seal > 0 ? s.sealBy : -1 });
-        continue;
-      }
-      const sc = b.x * s.tx + b.y * s.ty, pad = s.pad;
-      // The paddle only counts while the ball is still in front of the line;
-      // once it is half a radius past, it is going in.
-      if (dist > -R * 0.5 && Math.abs(sc - pad.s) <= pad.hl + R) {
-        const off = Math.max(-1, Math.min(1, (sc - pad.s) / pad.hl));
-        const english = ((pad.s - pad.prev) / dt) * 0.08;
-        const ang = Math.max(-1.1, Math.min(1.1, off * MAX_ANGLE + english));
-        b.speed = Math.min(SPEED_MAX, b.speed * SPEED_UP);
-        const dx = -s.ux * Math.cos(ang) + s.tx * Math.sin(ang);
-        const dy = -s.uy * Math.cos(ang) + s.ty * Math.sin(ang);
-        b.vx = dx * b.speed; b.vy = dy * b.speed;
-        b.x -= s.ux * (R - dist); b.y -= s.uy * (R - dist);
-        b.last = s.player;
-        s.flash = 1;
-        for (const o of this.players) o.botErr = this.botError(o.pad.hl);
-        this.events.push({ type: 'hit', player: s.player, x: b.x, y: b.y, nx: -s.ux, ny: -s.uy });
       }
     }
     b.trail.push(b.x, b.y);
     if (b.trail.length > 28) b.trail.splice(0, 2);
+  }
+
+  /*
+   * Where along side s the paddle stood that covers a ball at tangent
+   * position sc, or null if none did: the paddle as it is now, and for a
+   * remote side any position it reported in the last GRACE seconds, the
+   * nearest to the ball winning so the bounce angle is the fairest one.
+   */
+  cover(s, sc, R) {
+    const reach = s.pad.hl + R;
+    if (Math.abs(sc - s.pad.s) <= reach) return s.pad.s;
+    if (!s.remote) return null;
+    let best = null, bestD = reach;
+    for (let i = 0; i < RECENT; i++) {
+      if (this.time - s.recent[i * 2] > GRACE) continue;
+      const d = Math.abs(sc - s.recent[i * 2 + 1]);
+      if (d <= bestD) { bestD = d; best = s.recent[i * 2 + 1]; }
+    }
+    return best;
   }
 
   /*

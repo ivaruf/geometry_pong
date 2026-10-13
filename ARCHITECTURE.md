@@ -57,6 +57,9 @@ export default {
 
   glyph(ctx, r, time, px) {},          // the icon inside the pickup ring
   draw(ctx, match, fx, time, px) {},   // an overlay while it lasts (optional)
+
+  pack(match, fx) {},                  // online: what draw needs from fx.data, as numbers (optional)
+  unpack(match, fx, nums) {},          // online, on a guest: rebuild fx.data from them (optional)
 };
 ```
 
@@ -114,6 +117,27 @@ space (y down, units of circumradius) and `'lighter'` compositing on.
 `globalAlpha` arrives set to the pickup's fade and you should multiply into
 it, not overwrite it, in `glyph`. No `shadowBlur`, no allocation per frame
 beyond a path, and nothing that reads the DOM.
+
+### Online: pack and unpack
+
+Online (DESIGN.md §6) only the host runs the sim. A guest draws from a
+*shadow* Match the snapshots overwrite: `fx.def`, `fx.by`, `fx.t`, `fx.dur`,
+`fx.x`, `fx.y`, the balls, the paddles and `match.mods.ballRadius` all
+arrive, so a `draw` that reads only those needs nothing more. **`fx.data`
+does not travel by itself**, so a power-up whose `draw` reads `fx.data`
+(Black hole's well, Bumpers' positions, Curve's per-ball spin, Shield's
+break) provides the pair:
+
+- `pack(match, fx)` on the host returns an array of plain numbers — at most
+  40, each within ±32, sent at 1/1000 — holding exactly what `draw` reads.
+- `unpack(match, fx, nums)` on a guest rebuilds `fx.data` from them, after
+  the shadow's balls are in place, so per-ball state can be keyed by
+  `match.balls[i]` in the same order the host packed it. It runs every
+  snapshot (60 a second) and should not keep anything it would not rebuild.
+
+A guest never calls `collect`, `tick` or `end`, so `unpack` is the only way
+anything gets into a guest's `fx.data`. Without the pair the effect still
+plays on the host's sim — it just draws nothing on a guest's screen.
 
 ### Rules of taste
 

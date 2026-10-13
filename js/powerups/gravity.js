@@ -173,4 +173,15 @@ export default {
     ctx.arc(0, 0, 0.018, 0, Math.PI * 2);
     ctx.fill();
   },
+
+  // Online (ARCHITECTURE.md, "pack and unpack"): the well and its clock are
+  // all draw needs. The per-ball allowances stay on the host, which steers.
+  pack(match, fx) {
+    return [fx.data.wx, fx.data.wy, fx.data.age];
+  },
+  unpack(match, fx, nums) {
+    fx.data.wx = nums[0] || 0;
+    fx.data.wy = nums[1] || 0;
+    fx.data.age = nums[2] || 0;
+  },
 };

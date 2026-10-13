@@ -139,4 +139,12 @@ export default {
       ctx.fillRect(x - 2 * px, y - 2 * px, 4 * px, 4 * px);
     }
   },
+
+  // Online: only whether, and when, the barrier broke.
+  pack(match, fx) {
+    return [fx.data.broke ?? -1];
+  },
+  unpack(match, fx, nums) {
+    fx.data.broke = nums.length ? nums[0] : -1;
+  },
 };
