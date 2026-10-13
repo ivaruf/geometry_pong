@@ -20,7 +20,7 @@
 // All paths are RELATIVE: the game is served from /<slug>/ and is also framed
 // by the arcade from a sibling directory.
 
-const VERSION = 'v1.1.0'; // power-ups: ten of them, pixel badges and explosions, the Kaos slider on the start screen
+const VERSION = 'v1.1.1'; // power-up badges drawn crisp at screen resolution, symbols a little bolder
 const PREFIX = 'geometry_pong-';
 const CACHE = `${PREFIX}${VERSION}`;
 

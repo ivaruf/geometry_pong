@@ -35,16 +35,19 @@ const TOAST_TIME = 2.2;
  * kicking one). Everything else in the game stays smooth light, so a square
  * pixel always means "a power-up did that".
  *
- * The badge is drawn small into one shared offscreen canvas — rim, bevel,
- * dark core, and the power-up's own glyph(), unchanged — then scaled up onto
- * the board with smoothing off. That is what makes all ten glyphs, written
- * by different hands as smooth vector strokes, come out as one family of
- * sprites. One canvas, reused for each pickup in turn: nothing allocated.
+ * The badge is drawn into one shared offscreen canvas — rim, bevel, dark
+ * core, a fine inner line, and the power-up's own glyph() with a slightly
+ * heavier stroke — at exactly the size it lands on screen, device pixels and
+ * all, so it is crisp. (It was once drawn at 20 px and blown up with
+ * smoothing off; the owner found that too pixelated for the symbols, so the
+ * pixels now belong to the sparkles and the explosions only.) The shared
+ * frame is what makes ten glyphs from different hands read as one family.
+ * One canvas, resized only when the screen is, reused for each pickup in
+ * turn: nothing allocated.
  *
  * Explosion pixels snap to a grid of CELL CSS pixels, so they move in steps
  * the way an old arcade sprite does.
  */
-const BADGE = 20; // offscreen badge size: small, so each of its pixels lands 2–3 CSS pixels wide
 const CELL = 4; // CSS pixels per explosion pixel
 
 export const RIM = 0.32;
@@ -82,7 +85,6 @@ export function createRenderer(canvas, view) {
   const rings = []; // pixel shockwaves { x, y, r, vr, life, max, colour }
   let flash = null; // { colour, t } a moment of colour over the whole board
   const badge = document.createElement('canvas');
-  badge.width = badge.height = BADGE;
   const bctx = badge.getContext('2d');
 
   /* A pixel explosion: power ~0.4 for a bump, ~1.3 for a pickup. */
@@ -152,12 +154,13 @@ export function createRenderer(canvas, view) {
    * a dark core with a faint tint, and its glyph on top. Drawn every frame
    * because glyphs animate; at 20×20 that costs next to nothing.
    */
-  function drawBadge(def, colour, time) {
-    const b = bctx, c = BADGE / 2;
+  function drawBadge(def, colour, time, N) {
+    if (badge.width !== N) badge.width = badge.height = N;
+    const b = bctx, c = N / 2;
     b.setTransform(1, 0, 0, 1, 0, 0);
     b.globalCompositeOperation = 'source-over';
     b.globalAlpha = 1;
-    b.clearRect(0, 0, BADGE, BADGE);
+    b.clearRect(0, 0, N, N);
     const hex = (r) => {
       b.beginPath();
       for (let k = 0; k < 6; k++) {
@@ -167,31 +170,40 @@ export function createRenderer(canvas, view) {
       }
       b.closePath();
     };
-    const R = BADGE / 2 - 0.5;
+    const R = N / 2 - 1;
+    const rim = Math.max(2, N * 0.09);
     hex(R);
     b.fillStyle = colour;
     b.fill();
     // The bevel: the three upper-left edges a step lighter.
     b.save();
     b.beginPath();
-    b.moveTo(0, 0); b.lineTo(BADGE, 0); b.lineTo(0, BADGE); b.closePath();
+    b.moveTo(0, 0); b.lineTo(N, 0); b.lineTo(0, N); b.closePath();
     b.clip();
     hex(R);
     b.fillStyle = 'rgba(255,255,255,0.55)';
     b.fill();
     b.restore();
-    hex(R - 2);
+    hex(R - rim);
     b.fillStyle = '#0a0c16';
     b.fill();
     b.globalAlpha = 0.2;
     b.fillStyle = colour;
     b.fill();
+    // A fine line just inside the rim: the clean edge of the core.
+    hex(R - rim * 1.8);
+    b.globalAlpha = 0.45;
+    b.strokeStyle = colour;
+    b.lineWidth = Math.max(1, N * 0.025);
+    b.stroke();
     b.globalAlpha = 1;
     if (def.glyph) {
       b.translate(c, c);
       b.lineCap = 'round';
       b.lineJoin = 'round';
-      def.glyph(b, BADGE * 0.24, time, 0.6);
+      // px is one CSS pixel in badge pixels, a little over, so every
+      // glyph's strokes come out bolder than its own author drew them.
+      def.glyph(b, N * 0.24, time, (N / 20) * 0.72);
     }
   }
 
@@ -345,8 +357,8 @@ export function createRenderer(canvas, view) {
       }
     }
 
-    // Pickups: pixel-art badges (see THE PIXEL LAYER above) that bob in
-    // whole pixels, with three sparkle pixels circling. They fade in, and
+    // Pickups: crisp badges (see THE PIXEL LAYER above) that bob in whole
+    // explosion pixels, with three sparkle pixels circling. They fade in, and
     // blink through their last two seconds.
     const cell = CELL * px;
     const snap = (v) => Math.round(v / cell) * cell;
@@ -358,9 +370,10 @@ export function createRenderer(canvas, view) {
       const blink = left < 2 ? (Math.cos(time * 14) > -0.3 ? 1 : 0.25) : 1;
       const size = PICKUP_R * 2.3;
       const bob = snap(Math.sin(time * 3 + p.x * 9) * cell * 1.5);
-      drawBadge(def, colour, time);
+      // Drawn at its on-screen size in device pixels, so it lands 1:1.
+      drawBadge(def, colour, time, Math.max(16, Math.round(size * view.scale * view.dpr)));
       ctx.save();
-      ctx.imageSmoothingEnabled = false;
+      ctx.imageSmoothingEnabled = true;
       ctx.globalAlpha = fade * blink;
       ctx.drawImage(badge, snap(p.x - size / 2), snap(p.y - size / 2) + bob, size, size);
       ctx.restore();
