@@ -20,7 +20,7 @@
 // All paths are RELATIVE: the game is served from /<slug>/ and is also framed
 // by the arcade from a sibling directory.
 
-const VERSION = 'v1.2.0'; // Online: one player per screen over WebRTC, the board turned to each
+const VERSION = 'v1.2.1'; // sideways phones: the cards keep clear of the corner on its side only, so the setup column fits
 const PREFIX = 'geometry_pong-';
 const CACHE = `${PREFIX}${VERSION}`;
 

@@ -594,8 +594,16 @@ input[type="range"]:focus-visible {
 /* ---- a sideways phone: two columns, nothing scrolls ---- */
 
 @media (orientation: landscape) and (max-height: 500px) {
+  /* The corner takes the top right only, so the card keeps clear of it on
+     that side alone and centres in what is left. Keeping clear on both
+     sides, as this once did, left a 740px phone a 370px card and cut the
+     setup column off. */
   .card {
-    width: min(760px, calc(100% - 2 * var(--corner-room)));
+    left: calc(env(safe-area-inset-left, 0px) + 16px);
+    right: calc(env(safe-area-inset-right, 0px) + var(--corner-room));
+    margin-inline: auto;
+    translate: 0 -50%;
+    width: min(760px, calc(100% - var(--corner-room) - 16px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)));
     max-height: calc(100% - 24px);
     padding: 14px 18px;
     gap: 10px 22px;
