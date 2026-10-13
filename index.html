@@ -65,6 +65,9 @@
         </div>
         <div class="doors">
           <button id="play" class="go" type="button" data-i18n="play">Spill</button>
+          <!-- One player per screen, over WebRTC (js/lobby.js, js/net/). It
+               takes the setup rows above as the room's rules. -->
+          <button id="online-btn" class="go alt" type="button" data-i18n="online">På nett</button>
           <!-- UPDATE READY: only on the start screen, which is gone for the
                whole of a match, so no deploy can reload a rally away. Owned
                end to end by js/update.js, which nothing imports. -->
@@ -145,7 +148,48 @@
         </button>
       </section>
 
-      <!-- Match over. Escape is its secondary button: back to the start. -->
+      <!--
+        ONLINE (js/lobby.js). One card, three steps, one shown at a time:
+          choose   Create room / Join, with the rules the room will play by
+          code     the code field and Join
+          room     the code, big, the seats, and Play for the host
+        Back is always last and goes one step back, and so does Escape (hub
+        §2: a multi-step flow's Escape is that step's own Back). No way back
+        to the arcade here: this card is opened from the start screen, which
+        has it.
+      -->
+      <section id="online" class="card online" hidden>
+        <div class="online-head">
+          <h2 data-i18n="online">På nett</h2>
+          <p id="online-tag" class="tag"></p>
+        </div>
+        <div id="online-choose" class="online-step">
+          <p id="online-rules" class="rules"></p>
+          <div class="actions">
+            <button id="online-host" class="go" type="button" data-i18n="online.host">Lag rom</button>
+            <button id="online-join" class="go alt" type="button" data-i18n="online.join">Bli med</button>
+          </div>
+        </div>
+        <form id="online-code" class="online-step" hidden novalidate>
+          <label class="cap" for="code-field" data-i18n="online.code">Kode</label>
+          <input id="code-field" class="code-field" type="text" maxlength="9" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" enterkeyhint="go" />
+          <button id="code-go" class="go" type="submit" data-i18n="online.join">Bli med</button>
+        </form>
+        <div id="online-room" class="online-step" hidden>
+          <div class="room-code-block">
+            <span class="cap" data-i18n="online.code">Kode</span>
+            <p id="room-code" class="room-code" aria-live="polite"></p>
+            <p id="room-rules" class="rules"></p>
+          </div>
+          <ul id="room-seats" class="seats"></ul>
+          <button id="room-start" class="go" type="button" data-i18n="play" hidden>Spill</button>
+        </div>
+        <p id="online-status" class="status" role="status"></p>
+        <button id="online-back" class="go alt" type="button" data-i18n="back">Tilbake</button>
+      </section>
+
+      <!-- Match over. Escape is its secondary button: back to the start (online:
+           back to the room). -->
       <section id="over" class="card over" hidden>
         <span class="winner-mark" aria-hidden="true"></span>
         <h2 id="over-title"></h2>

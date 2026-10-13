@@ -18,6 +18,13 @@
  * outside the play field without covering the ball, and each side's score
  * and name live in that rim, rotated to face the person sitting there.
  *
+ * ONLINE the same rotation does a different job (DESIGN.md §4): main.js sets
+ * it once at the start of a match so this device's own side lies flat at the
+ * bottom, and the rim text, which faces the person sitting at each edge of a
+ * tabletop, is turned back upright instead (opts.upright), because online
+ * everyone reads one screen from one side. opts.mine names this device's
+ * player, whose rim says "you".
+ *
  * Sparks are this file's own: main.js feeds it the sim's events.
  */
 
@@ -260,6 +267,7 @@ export function createRenderer(canvas, view) {
   /*
    * opts.labels: draw the rim labels (scores, "robot", winner) — off in the
    * attract mode behind the title, where they would be noise.
+   * opts.upright, opts.mine: online (see the header).
    */
   function draw(m, time, dt, opts) {
     const { W, H, dpr, scale, cx, cy } = view;
@@ -452,7 +460,7 @@ export function createRenderer(canvas, view) {
     }
 
     ctx.globalCompositeOperation = 'source-over';
-    if (opts.labels) drawLabels(m, time);
+    if (opts.labels) drawLabels(m, time, opts);
 
     if (m.winner >= 0 && opts.labels) {
       ctx.globalCompositeOperation = 'lighter';
@@ -471,15 +479,26 @@ export function createRenderer(canvas, view) {
   }
 
   // Each side's score, glyph and a line of words, facing that side's seat.
-  function drawLabels(m, time) {
+  function drawLabels(m, time, opts) {
     const font = 'ui-rounded, "SF Pro Rounded", system-ui, sans-serif';
+    const online = !!opts.upright;
     for (const s of m.players) {
       const col = COLORS[s.player];
-      const lx = s.ux * (s.a + RIM * 0.42), ly = s.uy * (s.a + RIM * 0.42);
+      // Upright text on a side that runs up the screen is wide across it, so
+      // it moves further out by however sideways the side lies on screen.
+      const sideways = online ? Math.abs(s.ux * Math.cos(view.rot) - s.uy * Math.sin(view.rot)) : 0;
+      const out = s.a + RIM * 0.42 + sideways * 0.1;
+      const lx = s.ux * out, ly = s.uy * out;
       ctx.save();
       ctx.translate(lx, ly);
-      // Text "up" must point at the centre for the person sitting outside.
-      ctx.rotate(Math.atan2(s.uy, s.ux) - Math.PI / 2);
+      if (online) {
+        // Upright on this screen, the block centred on its point.
+        ctx.rotate(-view.rot);
+        ctx.translate(-0.08, 0);
+      } else {
+        // Text "up" must point at the centre for the person sitting outside.
+        ctx.rotate(Math.atan2(s.uy, s.ux) - Math.PI / 2);
+      }
       ctx.globalAlpha = 1;
       glyph(GLYPHS[s.player], -0.11, 0, 0.026, col);
       ctx.fillStyle = col;
@@ -492,11 +511,14 @@ export function createRenderer(canvas, view) {
       if (m.winner === s.player) {
         label = t('rim.winner');
         ctx.globalAlpha = 1;
+      } else if (online && s.player === opts.mine) {
+        label = t('rim.you', m.target);
+        ctx.globalAlpha = 0.9;
       } else if (s.human) {
         label = t('rim.firstTo', m.target);
         ctx.globalAlpha = 0.75;
       } else {
-        label = t('rim.bot');
+        label = t(online ? 'rim.botOnline' : 'rim.bot');
         ctx.globalAlpha = 0.45 + 0.3 * Math.sin(time * 3);
       }
       const toast = toasts.get(s.player);

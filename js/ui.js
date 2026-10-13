@@ -12,6 +12,15 @@
  *          the language row and the way back to the arcade, last. Local play
  *          only for now, so the menu always pauses (hub §2).
  *   over   who won, the score, Play again / Main menu
+ *   online the lobby card; js/lobby.js fills it, this file only shows it
+ *
+ * ONLINE THE MENU DOES NOT PAUSE (hub §2): the match belongs to the whole
+ * room. showPause({ live: true }) gives the panel its live face — "Menu",
+ * a line saying the match carries on, Resume to close it — and the board
+ * and the paddle stay live behind it, as NeonFox's `live` branch does.
+ * `canRestart` is false for a guest, whose Restart would be a button that
+ * does nothing (starting is the host's alone); the over card's Play again
+ * likewise. Online the over card's way back is "Back", to the room.
  *
  * Menu words are the hub's shared glossary (§2); the game's own voice is its
  * look — neon on black — and the rim lines on the board.
@@ -30,8 +39,8 @@ import { COLORS } from './sim.js';
 
 const $ = (id) => document.getElementById(id);
 
-export function createUI({ onPlay, onResume, onRestart, onMainMenu, onMenu, onPower }) {
-  const cards = { start: $('start'), menu: $('menu'), over: $('over') };
+export function createUI({ onPlay, onOnline, onResume, onRestart, onMainMenu, onMenu, onPower }) {
+  const cards = { start: $('start'), menu: $('menu'), over: $('over'), online: $('online') };
   let face = 'pause';
   let settingsFrom = 'start'; // the card the Settings face's Back returns to
   const choice = { sides: 4, target: 10 };
@@ -71,6 +80,7 @@ export function createUI({ onPlay, onResume, onRestart, onMainMenu, onMenu, onPo
   seg('target', [5, 10, 15, 20], 'target');
 
   $('play').addEventListener('click', () => onPlay(choice.sides, choice.target));
+  $('online-btn').addEventListener('click', onOnline);
   $('menu-resume').addEventListener('click', onResume);
   $('menu-restart').addEventListener('click', onRestart);
   $('menu-main').addEventListener('click', onMainMenu);
@@ -79,15 +89,20 @@ export function createUI({ onPlay, onResume, onRestart, onMainMenu, onMenu, onPo
   $('over-main').addEventListener('click', onMainMenu);
   $('menu-btn').addEventListener('click', onMenu);
 
-  function setFace(next) {
+  // face: 'pause' (a stopped local match), 'live' (an online match that
+  // carries on) or 'settings' (outside a match).
+  function setFace(next, canRestart = true) {
     face = next;
-    const inMatch = face === 'pause';
+    const inMatch = face !== 'settings';
     const title = $('menu-title');
-    title.dataset.i18n = inMatch ? 'paused' : 'settings';
+    title.dataset.i18n = face === 'live' ? 'live' : inMatch ? 'paused' : 'settings';
     title.textContent = t(title.dataset.i18n);
-    $('menu-tag').hidden = !inMatch;
+    const tag = $('menu-tag');
+    tag.dataset.i18n = face === 'live' ? 'live.tag' : 'pause.tag';
+    tag.textContent = t(tag.dataset.i18n);
+    tag.hidden = !inMatch;
     $('menu-resume').hidden = !inMatch;
-    $('menu-restart').hidden = !inMatch;
+    $('menu-restart').hidden = !inMatch || !canRestart;
     $('menu-main').hidden = !inMatch;
     $('menu-back').hidden = inMatch;
   }
@@ -153,7 +168,11 @@ export function createUI({ onPlay, onResume, onRestart, onMainMenu, onMenu, onPo
   let overArgs = null;
   function paintOver() {
     if (!overArgs) return;
-    const { winner, score, best } = overArgs;
+    const { winner, score, best, online, canAgain } = overArgs;
+    $('over-again').hidden = !canAgain;
+    const main = $('over-main');
+    main.dataset.i18n = online ? 'back' : 'mainMenu';
+    main.textContent = t(main.dataset.i18n);
     $('over-title').textContent = t('over.wins', t(`colour.${winner}`));
     $('over-score').textContent = t('over.score', score, best);
     cards.over.style.setProperty('--c', COLORS[winner]);
@@ -227,10 +246,12 @@ export function createUI({ onPlay, onResume, onRestart, onMainMenu, onMenu, onPo
     exitShown: () => exitApi != null && !exitRefused,
     showStart: () => show('start'),
     hideCards: () => show(null),
-    showPause() {
-      setFace('pause');
+    showPause({ live = false, canRestart = true } = {}) {
+      setFace(live ? 'live' : 'pause', canRestart);
       show('menu');
     },
+    showOnline: () => show('online'),
+    choices: () => ({ sides: choice.sides, target: choice.target, power: powerLevel }),
     showSettings() {
       settingsFrom = current(); // may be null: over a board with no card
       setFace('settings');
@@ -238,9 +259,9 @@ export function createUI({ onPlay, onResume, onRestart, onMainMenu, onMenu, onPo
     },
     inSettings: () => !cards.menu.hidden && face === 'settings',
     settingsBack: () => show(settingsFrom),
-    paused: () => !cards.menu.hidden && face === 'pause',
-    showOver(winner, score, best) {
-      overArgs = { winner, score, best };
+    paused: () => !cards.menu.hidden && face !== 'settings',
+    showOver(winner, score, best, { online = false, canAgain = true } = {}) {
+      overArgs = { winner, score, best, online, canAgain };
       paintOver();
       show('over');
     },

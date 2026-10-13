@@ -20,7 +20,7 @@
 // All paths are RELATIVE: the game is served from /<slug>/ and is also framed
 // by the arcade from a sibling directory.
 
-const VERSION = 'v1.1.1'; // power-up badges drawn crisp at screen resolution, symbols a little bolder
+const VERSION = 'v1.2.0'; // Online: one player per screen over WebRTC, the board turned to each
 const PREFIX = 'geometry_pong-';
 const CACHE = `${PREFIX}${VERSION}`;
 
@@ -41,6 +41,16 @@ const ASSETS = [
   './js/ui.js',
   './js/audio.js',
   './js/i18n.js',
+  './js/lobby.js',
+  './js/net/protocol.js',
+  './js/net/codes.js',
+  './js/net/webrtc.js',
+  './js/net/rendezvous.js',
+  './js/net/host.js',
+  './js/net/host-worker.js',
+  './js/net/guest.js',
+  './js/net/shadow.js',
+  './vendor/peerjs.js',
   './js/powerups/index.js',
   './js/powerups/slow.js',
   './js/powerups/split.js',

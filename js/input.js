@@ -21,6 +21,14 @@
  *
  * Only pointerdowns on the canvas count, so the DOM corner and the cards,
  * which sit above it, never steer anything.
+ *
+ * ONLINE (DESIGN.md §4, §6) a device has exactly one side, set with
+ * reset(match, side): every finger anywhere on the board steers it (there is
+ * nobody else at this screen to steal it from, and the middle need not be
+ * dead), and BOTH key pairs steer it, left meaning left on the screen as the
+ * board has been turned — the side's tangent is put through view.rot before
+ * its sign is read. read() still returns one input per player, with null
+ * for every side that is not this device's.
  */
 
 const RELEASE_GRACE = 2000; // ms
@@ -34,9 +42,11 @@ export function createInput(canvas, view) {
   let live = false; // only while a run is being played
   // per player index: { pointerId, releasedAt, hold }
   let seats = [];
+  let only = null; // online: the one side this device steers
 
-  function reset(m) {
+  function reset(m, side = null) {
     match = m;
+    only = side;
     pointers.clear();
     keys.clear();
     seats = m.players.map(() => ({ pointerId: null, releasedAt: -1e9, hold: 0 }));
@@ -71,7 +81,7 @@ export function createInput(canvas, view) {
     const rec = { x: p.x, y: p.y, side: null, kind: 'dead' };
     if (e.pointerType === 'touch' && Math.max(e.width || 0, e.height || 0) > PALM_PX) rec.kind = 'palm';
     else {
-      const s = match.sideAt(p.x, p.y);
+      const s = only || match.sideAt(p.x, p.y);
       if (s) {
         rec.side = s;
         rec.kind = 'own';
@@ -92,7 +102,10 @@ export function createInput(canvas, view) {
 
   addEventListener('keydown', (e) => {
     if (!live || !KEY_CODES.includes(e.code)) return;
-    if (e.target && e.target.closest && e.target.closest('input, button, textarea')) return;
+    // A focused field keeps its arrows. Online a focused button does not:
+    // the menu panel does not pause there (hub §2), so its buttons may hold
+    // focus while the paddle must still answer the keys.
+    if (e.target && e.target.closest && e.target.closest(only ? 'input, textarea' : 'input, button, textarea')) return;
     keys.add(e.code);
     e.preventDefault();
   });
@@ -103,7 +116,9 @@ export function createInput(canvas, view) {
     const ax = (keys.has(right) ? 1 : 0) - (keys.has(left) ? 1 : 0);
     if (!keys.has(left) && !keys.has(right)) return null;
     // Screen-left is -x, and a side's tangent may point either way along x.
-    return ax * (Math.sign(s.tx) || 1);
+    // Online the board is turned, so the tangent is turned with it first.
+    const tx = only ? s.tx * Math.cos(view.rot) - s.ty * Math.sin(view.rot) : s.tx;
+    return ax * (Math.sign(tx) || 1);
   }
 
   /* One input per player for this tick. */
@@ -119,7 +134,11 @@ export function createInput(canvas, view) {
         return { target: seat.hold };
       }
       let axis = null;
-      if (s === p1) axis = keyAxis(s, 'ArrowLeft', 'ArrowRight');
+      if (only) {
+        if (s !== only) return null;
+        axis = keyAxis(s, 'ArrowLeft', 'ArrowRight');
+        if (axis === null) axis = keyAxis(s, 'KeyA', 'KeyD');
+      } else if (s === p1) axis = keyAxis(s, 'ArrowLeft', 'ArrowRight');
       else if (s === p2) axis = keyAxis(s, 'KeyA', 'KeyD');
       if (axis !== null) {
         seat.hold = s.pad.s;

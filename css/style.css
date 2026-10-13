@@ -482,6 +482,115 @@ input[type="range"]:focus-visible {
   width: 100%;
 }
 
+/* ---- online: the lobby card ---- */
+
+/* The same smoked glass and the same buttons as every other card; the three
+   things it has that no other card does — a code field, a big code and a row
+   of seats — take their light from the board: the code glows cyan like a
+   paddle, and each seat is its player's colour and polygon. */
+.online-head {
+  display: grid;
+  gap: 6px;
+}
+.online-step {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+}
+.rules {
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+.status {
+  margin: 0;
+  min-height: 1.4em;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  color: var(--dim);
+}
+.status.warn {
+  color: var(--yellow);
+}
+/* A text field gets selection back (the html, body rule above) and a look
+   of the game's own: a dark well with a cyan edge, letters spaced like the
+   code it holds. */
+.code-field {
+  width: 100%;
+  min-height: var(--tap);
+  padding: 0 14px;
+  border-radius: 4px;
+  border: 1px solid var(--edge);
+  background: rgba(4, 6, 12, 0.7);
+  color: var(--cyan);
+  font: 800 1.6rem var(--font);
+  letter-spacing: 0.4em;
+  text-align: center;
+  text-transform: uppercase;
+}
+.code-field:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+.room-code-block {
+  display: grid;
+  gap: 4px;
+  justify-items: center;
+  text-align: center;
+}
+.room-code {
+  margin: 0;
+  font-size: 3rem;
+  font-weight: 800;
+  letter-spacing: 0.3em;
+  /* the spacing hangs off the last letter; give it back so it centres */
+  margin-right: -0.3em;
+  color: var(--cyan);
+  text-shadow: 0 0 18px rgba(59, 232, 255, 0.45);
+  font-variant-numeric: tabular-nums;
+}
+/* The seats: one group, so one grid with a shared swatch gutter (hub §2). */
+.seats {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 6px;
+}
+.seat {
+  --c: var(--cyan);
+  display: grid;
+  grid-template-columns: 16px 1fr;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--edge);
+  font-size: 0.85rem;
+}
+.seat::before {
+  content: "";
+  width: 14px;
+  height: 14px;
+  background: var(--c);
+  clip-path: polygon(25% 4%, 75% 4%, 100% 50%, 75% 96%, 25% 96%, 0 50%);
+}
+.seat.bot {
+  color: var(--dim);
+}
+.seat.bot::before {
+  opacity: 0.45;
+}
+.seat.me {
+  border-color: var(--c);
+  box-shadow: inset 0 0 0 1px var(--c);
+}
+#online-back {
+  margin-top: 4px;
+}
+
 /* ---- a sideways phone: two columns, nothing scrolls ---- */
 
 @media (orientation: landscape) and (max-height: 500px) {
@@ -515,6 +624,35 @@ input[type="range"]:focus-visible {
   }
   .menu-settings {
     align-content: center;
+  }
+  /* The lobby: the heading, the status and Back down the left, whichever
+     step is showing down the right — the code and the seats side by side
+     when the room is open, since that is the tallest step. */
+  .online {
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas: "head step" "status step" "back step";
+    align-items: center;
+  }
+  .online-head {
+    grid-area: head;
+  }
+  .online-step {
+    grid-area: step;
+  }
+  #online-status {
+    grid-area: status;
+  }
+  #online-back {
+    grid-area: back;
+  }
+  .room-code {
+    font-size: 2.2rem;
+  }
+  .seats {
+    grid-template-columns: 1fr 1fr;
+  }
+  .seat {
+    padding: 4px 8px;
   }
   .go,
   .seg-btn {
