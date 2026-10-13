@@ -29,11 +29,15 @@ for (let n = 2; n <= 8; n++) {
   const shadow = createShadow({ sides: n, target: 15, mine: 1 });
   shadow.setVersion(7);
   let frames = 0, bytes = 0, largest = 0, maxBalls = 0, maxFx = 0, unpacked = 0;
+  let pending = [], eventBytes = 0; // the reliable lane's EVENTS messages, as host.js sends them
   const fxSeen = new Set();
   for (let tick = 1; tick <= 180 / TICK && m.winner < 0; tick++) {
     m.step(TICK, []);
+    pending.push(...m.events);
     m.events.length = 0;
     if (tick % 2) continue;
+    if (pending.length) eventBytes += JSON.stringify({ t: 'EVENTS', e: pending }).length;
+    pending = [];
     const buf = packFrame(m, ++frames, 7);
     bytes += buf.length;
     largest = Math.max(largest, buf.length);
@@ -82,6 +86,7 @@ for (let n = 2; n <= 8; n++) {
   console.log(
     `kaos ${level}  N=${n}  frames ${frames}  mean ${mean.toFixed(1)} B  largest ${largest} B  ` +
       `${((mean * 60 * 8) / 1000).toFixed(1)} kbit/s to one guest  ` +
+      `events ${((eventBytes / (frames / 60) * 8) / 1000).toFixed(1)} kbit/s  ` +
       `up to ${maxBalls} balls, ${maxFx} effects  (${fxSeen.size} kinds seen, ${unpacked} unpacks)`,
   );
 }

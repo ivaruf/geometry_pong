@@ -16,11 +16,21 @@ the code. DESIGN.md says what the game is; this says how the pieces fit.
 | `js/powerups/gravity.js`, `bumpers.js`, `curve.js` | lane B | |
 | `js/powerups/wide.js`, `shrink.js`, `shield.js` | lane C | |
 | `js/audio.js`, `tools/audio/**`, `audio/**` | sound lane | |
+| `js/net/**`, `js/lobby.js`, `vendor/`, `tools/net-smoke.mjs` | integrator | Online: docs/P2P.md |
 | everything else (`main.js`, `ui.js`, `input.js`, `i18n.js`, `index.html`, `css/`, `sw.js`, docs) | integrator | |
 
 A lane that needs something from a file it does not own — a new sim hook, an
 event the renderer should react to, a sound — **asks in its report** rather
 than editing that file.
+
+## Online
+
+`js/sim.js` stays DOM-free so it runs unchanged in the host's worker
+(`js/net/host-worker.js`) and as a never-stepped *shadow* on every screen
+(`js/net/shadow.js`), which is what `render.js` draws online. Two things in
+the sim exist for Online and nowhere else: the `{ target, remote: true }`
+input, which turns on THE REMOTE GRACE in sim.js's header, and the power-up
+`pack`/`unpack` pair below. docs/P2P.md has the rest.
 
 ## Coordinates
 
@@ -149,7 +159,8 @@ plays on the host's sim — it just draws nothing on a guest's screen.
 
 ### Checks
 
-`node --check` every file you touch, and `node tools/sim-smoke.mjs`, which
+`node --check` every file you touch, `node tools/net-smoke.mjs` if you add
+or change a `pack`/`unpack`, and `node tools/sim-smoke.mjs`, which
 plays every shape with power-ups off and at level 4 and fails if a match
 does not finish, a ball escapes or goes non-finite, or the ball count runs
 away.

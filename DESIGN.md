@@ -146,26 +146,22 @@ players / To spillere** (one keyboard, like NeonFox), **Tabletop / Bordspill**
 for player two. Every rule below exists to keep "left" meaning left on the
 screen in front of you.
 
-### Online: turn the board, or not — undecided
+### Online: the board turns — decided
 
-Each device has one player, so each device *could* draw the board rotated so
-its own side is flat at the bottom. The case for it is the controls, not the
-look: on a fixed hexagon your side may be the upper-right one, and on a fixed
-square it may be a vertical one, where left and right mean nothing — you would
-need up and down instead, and a different pair for every seat.
+Each device has one player, so each device draws the board **turned so its
+own side is flat at the bottom** (the owner's call, 2026-10-13). The case for
+it is the controls, not the look: on a fixed hexagon your side may be the
+upper-right one, and on a fixed square it may be a vertical one, where left
+and right mean nothing.
 
-- **Turned** (`ctx.rotate(-π/2 - θ_mine)` once at the top of the draw; input
-  rotated back). Left is always left. Set once when the match starts, never
-  moved during play. Rotation only, never a mirror, so an angle shot looks
-  the same to the shooter as to everyone else.
-- **Fixed**, everybody seeing the same board as the host. Simpler, and a
-  screenshot means the same thing on every device — but it needs the seating
-  rule from the keyboard mode below, which caps how many sides are playable
-  with left/right before somebody lands on a vertical edge.
-
-Leaning **turned**, because it is the only option that works for all eight
-seats with two keys. Owner to decide after trying both; it is one transform
-either way and can be a setting.
+- Set once when the match starts, never moved during play. Rotation only,
+  never a mirror, so an angle shot looks the same to the shooter as to
+  everyone else. Keys and fingers are turned with it, so left is always left.
+- The rim text, which faces each edge on a tabletop, stands upright on every
+  screen online, because everyone reads their own screen from one side.
+- Local modes (tabletop, keyboard, solo) are unchanged: their board is fixed.
+- The host sits on side 0, which is already at the bottom, so its board does
+  not turn at all.
 
 ### Two players, one keyboard
 
@@ -178,9 +174,9 @@ projected onto the side. No keyboard seat is ever steeper than 60°, which is
 what the "most nearly up" rule guarantees for every N from 2 to 8. Every other
 side is a bot or a wall.
 
-A device can later bring both its players into an online room, as NeonFox
-allows. That device then uses this fixed seating rather than turning the
-board. Not in the first version.
+A device could later bring both its players into an online room, as NeonFox
+allows. That device would then use this fixed seating rather than turning the
+board. Not built: online is one player per device.
 
 ### Tabletop: one tablet, many fingers
 
@@ -265,7 +261,9 @@ line with a glow, and the polygon is echoed everywhere.
 
 ## 6. Multiplayer
 
-Hub §8, and **NeonFox is the reference to copy**, because it is the newest
+**Built 2026-10-13** as described here; `docs/P2P.md` has what was measured,
+the lanes, the frame and the trades. Hub §8, and **NeonFox is the reference
+to copy**, because it is the newest
 host-authoritative game here and its `js/net/` is already the fishtank shape
 in plain ES modules: host-authoritative star, sim in a Web Worker, reliable
 lane for roster and events, lossy lane for state frames, three-tier
@@ -297,9 +295,15 @@ thumb feels broken. So:
   not show.
 - **Snapshots are tiny**: at most three balls, eight paddles, one pickup,
   the scores and which sides are sealed. A binary codec anyway, shared by both ends.
-- **Sides are seats.** Joining takes an empty side (or replaces a bot);
-  leaving mid-match turns your side into a bot, never a hole, so a dropped
-  connection does not hand everyone a free goal.
+- **Sides are seats.** Joining takes a bot's side, mid-match included;
+  leaving turns your side back into a bot, never a hole, so a dropped
+  connection does not hand everyone a free goal. The host picks sides, first
+  to and Kaos on its start screen; guests see the room's rules in the lobby.
+- **Power-ups work online.** Pickups and effects ride in every frame, and the
+  four whose overlays draw from their own state (the well, the bumpers, the
+  curve's spin, the shield's break) pack it for the guest (ARCHITECTURE.md,
+  "pack and unpack"). Sounds and sparks on a guest come from the host's
+  events, relayed by type and id, never as words.
 - **The menu does not pause online** (hub §2): the plate opens the panel and
   your paddle stays live behind it.
 - Honest limits, as in fishtank and NeonFox: no TURN, so some pairs never
@@ -351,15 +355,13 @@ DOM, `js/render.js` draws, `js/input.js` turns fingers and keys into one input
 per side, `js/ui.js` and `js/main.js` carry the hub's menus, corner and
 Escape ladder. `tools/sim-smoke.mjs` plays every shape headless.
 
-Still to come, in this order: pickups (`js/sim.js` grows them, `js/render.js`
-draws the glyphs), Sonic Pi cues in `tools/audio/`, then Online with
-`js/net/` copied and trimmed from NeonFox. Before agents work on it in
-parallel, this section becomes an `ARCHITECTURE.md` lane contract with one
-owner per file (hub §12).
+Built since: pickups and the ten power-ups (`js/powerups/`), the Sonic Pi
+cues (`tools/audio/`), and Online — `js/net/` copied and trimmed from NeonFox,
+`js/lobby.js` for the card. `ARCHITECTURE.md` is the lane contract (hub §12).
 
 ## 10. Open questions for the owner
 
-1. **Turn the board online, or not** (§4). Try both; it can be a setting.
+1. ~~Turn the board online, or not~~ — turned (§4), decided 2026-10-13.
 2. **How long the seal lasts.** 2 s is a guess; it wants a playtest with three
    balls on a hexagon, where it matters most.
 3. **Own goals.** They score nothing today. The alternative is a point to the
